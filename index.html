@@ -1,0 +1,2887 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Workload Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Untuk Chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SheetJS Library untuk Export Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- FontAwesome Font Icon -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+  /* Kustomisasi Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Efek Transisi Halus */
+  button, a, .group {
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* Efek Bayangan Lembut Khusus Kartu Tim */
+  #team-grid > div {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+    transition: box-shadow 0.2s ease-in-out;
+  }
+  #team-grid > div:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen">
+
+  <!-- LAYAR LOGIN -->
+  <div id="login-screen" class="fixed inset-0 w-screen h-screen z-[100] flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style="background-image: url('background.jpg');">
+    
+    <!-- Overlay Gelap & Efek Blur agar kotak login semakin menonjol -->
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+
+    <!-- Kotak Menu Login (Posisinya di tengah / center) -->
+    <div class="bg-white/95 backdrop-blur-md p-8 rounded-2xl shadow-2xl max-w-sm w-full border border-white/20 relative z-10">
+      <div class="text-center mb-6">
+        <img src="logo.png" alt="Logo" class="w-12 h-12 mx-auto mb-3 object-contain" onerror="this.style.display='none'">
+        <h2 class="text-xl font-black text-slate-800">Visual Design Workload</h2>
+        <p class="text-xs text-slate-500 mt-1">Silakan masuk menggunakan NIK Anda</p>
+      </div>
+      
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">Nomor Induk Karyawan (NIK)</label>
+          <input type="text" id="login-nik" required placeholder="Contoh: 202301001" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition bg-slate-50 focus:bg-white text-center font-bold tracking-widest">
+        </div>
+        <button type="submit" id="btn-login" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition flex justify-center items-center gap-2">
+          Masuk ke Dashboard
+        </button>
+        <p id="login-error" class="text-xs text-rose-600 font-medium text-center hidden">NIK tidak ditemukan. Silakan hubungi admin.</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- BUNGKUS DASBOR UTAMA ANDA -->
+  <div id="app-dashboard" class="hidden">
+    <!-- LETAKKAN SEMUA KODE HEADER, SECTION, MAIN, DAN MODAL ANDA SEBELUMNYA DI SINI -->
+    <!-- TOPNAV & HEADER SOLID GREY (COMPACT) -->
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-md">
+      <div class="max-w-7xl mx-auto px-3 py-2 flex items-center justify-between gap-3">
+        
+        <!-- Bagian Logo & Judul -->
+        <div class="flex items-center gap-2 shrink-0">
+          <img src="logo.png" alt="Logo Workload" class="w-7 h-7 object-contain">
+          <div class="hidden lg:block">
+            <h1 class="text-xs font-bold text-white leading-tight">Design Visual YOMART Workload Dashboard</h1>
+            <p class="text-[10px] text-slate-400">Monitoring beban kerja tim real-time</p>
+          </div>
+        </div>
+
+        <!-- Kolom Search di Tengah -->
+        <div class="relative flex-1 max-w-xs mx-2">
+          <input type="text" id="search-input" onkeyup="handleSearch()" placeholder="Cari tugas/anggota..." class="w-full pl-3 pr-3 py-1 text-xs bg-slate-700 text-white placeholder-slate-400 border border-slate-600 rounded-lg focus:bg-white focus:text-slate-800 focus:outline-none transition">
+        </div>
+
+        <!-- Tab Navigasi & Aksi (Compact & Rata Kanan) -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          
+          <!-- TAB NAVIGASI -->
+          <button id="tab-personal" onclick="switchView('personal')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs transition-all">
+            <i class="fa-solid fa-user text-[10px] mr-0.5"></i> <span id="tab-my-name">Personal</span>
+          </button>
+          <button id="tab-team" onclick="switchView('team')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-700 text-slate-200 border border-slate-600 hover:bg-slate-600 transition-all">
+            <i class="fa-solid fa-users text-[10px] mr-0.5"></i> Tim
+          </button>
+          <button id="tab-report" onclick="switchView('report')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-700 text-slate-200 border border-slate-600 hover:bg-slate-600 transition-all">
+            <i class="fa-solid fa-chart-line text-[10px] mr-0.5"></i> Rekap
+          </button>
+
+          <!-- Tombol Tambah Tugas -->
+          <button onclick="openModal()" class="px-2.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition flex items-center gap-1 cursor-pointer">
+            <span>+</span> <span class="hidden sm:inline">Tugas</span>
+          </button>
+
+          <!-- Tombol Logout -->
+          <button onclick="logout()" class="px-2.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center gap-1" title="Keluar">
+            <i class="fa-solid fa-arrow-right-from-bracket text-[10px]"></i>
+          </button>
+
+        </div>
+      </div>
+    </header>
+
+    <!-- BERIKAN JARAK DI SINI (Bungkus area konten dengan mt-6) -->
+    <div class="mt-6">
+      <!-- Section statistik dan main grid tugas berada di sini -->
+    </div>
+    
+    <!-- Ringkasan Status & Statistik Tim (Modern Color Hierarchy) -->
+    <!-- Ubah tag section statistik Anda menjadi seperti ini -->
+    <section id="team-stats-section" class="max-w-7xl mx-auto mt-6 mb-8 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 hidden">
+      
+      <!-- 1. Total Anggota (Slate Accent) -->
+      <div onclick="openMemberListModal()" class="bg-slate-100/80 p-3 rounded-2xl border border-slate-200/80 shadow-sm cursor-pointer hover:border-indigo-400 hover:shadow transition group">
+        <div class="flex justify-between items-center">
+          <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Total Anggota</p>
+          <span class="text-[9px] text-indigo-600 font-bold bg-white px-1.5 py-0.5 rounded-md shadow-xs group-hover:bg-indigo-600 group-hover:text-white transition">Kelola →</span>
+        </div>
+        <p id="stat-total" class="text-xl font-black text-slate-800 mt-1">0</p>
+      </div>
+
+          <!-- Kartu Aman (Low) -->
+      <div onclick="showStatusMembers('low')" class="bg-emerald-50/60 p-3 rounded-2xl border border-emerald-200/70 shadow-sm cursor-pointer hover:scale-[1.02] transition">
+        <p class="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Santai (Low)</p>
+        <p id="stat-low" class="text-xl font-black text-emerald-600 mt-1">0</p>
+      </div>
+
+      <!-- Kartu Ideal (Medium) -->
+      <div onclick="showStatusMembers('medium')" class="bg-amber-50/60 p-3 rounded-2xl border border-amber-200/70 shadow-sm cursor-pointer hover:scale-[1.02] transition">
+        <p class="text-[10px] text-amber-700 font-bold uppercase tracking-wider">Normal (Medium)</p>
+        <p id="stat-medium" class="text-xl font-black text-amber-600 mt-1">0</p>
+      </div>
+
+      <!-- Kartu Overload (High) -->
+      <div onclick="showStatusMembers('high')" class="bg-rose-50/60 p-3 rounded-2xl border border-rose-200/70 shadow-sm cursor-pointer hover:scale-[1.02] transition">
+        <p class="text-[10px] text-rose-700 font-bold uppercase tracking-wider">Overload (High)</p>
+        <p id="stat-high" class="text-xl font-black text-rose-600 mt-1">0</p>
+      </div>
+      
+      <!-- 5. Total Tugas Tim (Clickable) -->
+      <div onclick="showStatusMembers('total-tasks')" class="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100 shadow-sm cursor-pointer hover:scale-[1.02] transition">
+        <p class="text-[10px] text-indigo-700 font-bold uppercase tracking-wider">Total Pekerjaan Tim</p>
+        <p id="stat-total-tasks" class="text-xl font-black text-indigo-900 mt-1">0</p>
+      </div>
+
+      <!-- 6. Tugas Selesai (Clickable) -->
+      <div onclick="showStatusMembers('done-tasks')" class="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 shadow-sm cursor-pointer hover:scale-[1.02] transition">
+        <p class="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Pekerjaan Selesai</p>
+        <p id="stat-done-tasks" class="text-xl font-black text-emerald-600 mt-1">0</p>
+      </div>
+
+      <!-- 7. Tingkat Penyelesaian (Blue Accent) -->
+      <div class="bg-blue-50/50 p-3 rounded-2xl border border-blue-100 shadow-sm">
+        <p class="text-[10px] text-blue-700 font-bold uppercase tracking-wider">Penyelesaian</p>
+        <p id="stat-completion-rate" class="text-xl font-black text-blue-600 mt-1">0%</p>
+      </div>
+
+    </section>
+
+    <!-- Grid Anggota Tim / Halaman Personal dengan Jarak Samping (Padding & Centered) -->
+    <main id="team-grid" class="max-w-7xl mx-auto mt-6 px-4 sm:px-6 lg:px-8 pb-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <p class="text-slate-500 col-span-full text-center py-10">Memuat data...</p>
+    </main>
+
+    <!-- MODAL KELOLA ANGGOTA TIM -->
+    <div id="member-list-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-100 max-h-[85vh] flex flex-col">
+        <div class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4">
+          <div>
+            <h3 class="text-lg font-bold text-slate-800">👥 Daftar & Kelola Anggota Tim</h3>
+            <p class="text-xs text-slate-500">Kelola nama, role, atau tambah anggota tim baru</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="openMemberModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+              <i class="fa-solid fa-user-plus"></i> Tambah Anggota
+            </button>
+            <button onclick="closeMemberListModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold p-1">✕</button>
+          </div>
+        </div>
+
+        <div id="member-list-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto pr-1 flex-1">
+          <!-- List anggota diisi via JS -->
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 mt-4 flex justify-end">
+          <button onclick="closeMemberListModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg">Tutup</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Tambah Anggota Tim Baru -->
+    <div id="member-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6">
+        <div class="flex justify-between items-center border-b pb-4">
+          <h3 class="text-lg font-bold text-gray-900">Tambah Anggota Tim Baru</h3>
+          <button onclick="closeMemberModal()" class="text-gray-400 hover:text-gray-600 text-lg">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        
+        <form id="member-form" onsubmit="handleSaveMember(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nama Lengkap</label>
+            <input type="text" id="new-member-name" required placeholder="Contoh: Budi Santoso" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Role / Jabatan (Opsional)</label>
+            <input type="text" id="new-member-role" placeholder="Contoh: Graphic Designer" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+          <!-- Tambahkan ini di dalam <form id="member-form"> -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">NIK</label>
+            <input type="text" id="new-member-nik" required placeholder="Masukkan NIK" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+          
+          <div class="flex justify-end space-x-3 pt-4 border-t">
+            <button type="button" onclick="closeMemberModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">Batal</button>
+            <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow">Simpan Anggota</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Modal Edit Anggota Tim -->
+    <div id="edit-member-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6">
+        <div class="flex justify-between items-center border-b pb-4">
+          <h3 class="text-lg font-bold text-gray-900">Edit Anggota Tim</h3>
+          <button onclick="closeEditMemberModal()" class="text-gray-400 hover:text-gray-600 text-lg">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        
+        <form id="edit-member-form" onsubmit="handleUpdateMember(event)" class="space-y-4">
+          <input type="hidden" id="edit-member-id">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nama Lengkap</label>
+            <input type="text" id="edit-member-name" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Role / Jabatan</label>
+            <input type="text" id="edit-member-role" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">NIK</label>
+            <input type="text" id="edit-member-nik" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+          
+          <div class="flex justify-end space-x-3 pt-4 border-t">
+            <button type="button" onclick="closeEditMemberModal()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">Batal</button>
+            <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow">Simpan Perubahan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL FORM TAMBAH / EDIT TUGAS -->
+      <!-- MODAL FORM TAMBAH / EDIT TUGAS -->
+      <div id="task-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs hidden overflow-y-auto flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 my-auto">
+        <h2 id="modal-task-title" class="text-lg font-bold mb-4 text-gray-800">Tambah Tugas Baru</h2>
+        
+        <form id="task-form" onsubmit="handleSaveTask(event)">
+          <input type="hidden" id="task-id">
+
+          <div class="mb-4">
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Ditugaskan Kepada</label>
+            <!-- Kembalikan ke bentuk select dropdown agar bisa dipakai saat Tambah Tugas -->
+            <select id="task-member-select" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+              <!-- Daftar member akan diisi otomatis oleh fungsi populateMemberDropdown() -->
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Judul Tugas</label>
+            <input type="text" id="task-title" required placeholder="Contoh: Desain Banner Promo" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Tanggal Pengajuan</label>
+            <input type="date" id="task-tanggal-pengajuan" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Cabang</label>
+            <!-- Diubah menjadi input text biasa -->
+            <input type="text" id="task-cabang" placeholder="Contoh: CIBADAK 1" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Tenggat Waktu / Deadline</label>
+              <input type="date" id="task-due" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Prioritas</label>
+              <select id="task-priority" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                <option value="Super">🔥 Super Priority (Darurat)</option>
+                <option value="High">🔴 High (Tinggi)</option>
+                <option value="Medium">🟡 Medium (Sedang)</option>
+                <option value="Low" selected>🟢 Low (Rendah)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Lampiran Pendukung -->
+          <div class="border border-dashed border-slate-300 p-3.5 rounded-xl space-y-3 bg-slate-50/50">
+            <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide">📎 Lampiran Pendukung (Opsional)</label>
+            
+            <div>
+              <span class="text-[11px] text-slate-500 block mb-1">Opsi 1: Link URL (Drive, Figma, Canva, dll)</span>
+              <input type="url" id="task-attachment-url" placeholder="https://..." class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <div>
+              <span class="text-[11px] text-slate-500 block mb-1">Opsi 2: Upload Banyak File Sekaligus / Paste Gambar (Ctrl + V)</span>
+              <input type="file" id="task-attachment-file" multiple accept=".jpg, .jpeg, .png, .pdf, .xlsx, .xls, .doc, .docx" class="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+            </div>
+
+            <!-- Box Pratinjau Banyak Gambar Hasil Paste (Ctrl+V) -->
+            <div id="paste-preview-container" class="hidden mt-2 p-2 bg-white rounded-lg border border-slate-200">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[10px] font-bold text-emerald-600">✓ Gambar Tempelan (<span id="pasted-count">0</span> gambar):</span>
+                <button type="button" onclick="clearAllPastedImages()" class="text-[10px] text-rose-500 hover:underline">Hapus Semua</button>
+              </div>
+              <div id="paste-preview-list" class="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                <!-- Daftar gambar preview akan dimasukkan otomatis via JavaScript -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Tombol Aksi -->
+          <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100">Batal</button>
+            <button type="submit" class="px-4 py-2 rounded-lg text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm">Simpan Tugas</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL CATATAN OVERDUE -->
+    <div id="note-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-100">
+        <h3 class="text-base font-bold text-slate-800 mb-2">📝 Catatan Keterlambatan</h3>
+        <p class="text-xs text-slate-500 mb-4">Tuliskan alasan keterlambatan untuk tugas ini:</p>
+        
+        <input type="hidden" id="note-task-id">
+        <textarea id="note-input" rows="3" placeholder="Contoh: Terlambat karena list promo telat masuk" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-rose-500 outline-none mb-4"></textarea>
+
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="closeNoteModal()" class="px-3 py-1.5 rounded-lg text-xs text-slate-600 hover:bg-slate-100">Batal</button>
+          <button type="button" onclick="saveTaskNote()" class="px-3 py-1.5 rounded-lg text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm">Simpan Catatan</button>
+        </div>
+      </div>
+    </div>
+
+  <!-- SECTION HALAMAN TAB REKAP PEKERJAAN -->
+  <div id="report-view-section" class="max-w-7xl mx-auto px-4 sm:px-6 pb-12 hidden">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      
+      <div class="flex justify-between items-center mb-6 border-b pb-4">
+        <div>
+          <h3 class="text-xl font-bold text-slate-800">📊 Rekap Pekerjaan Tim & Personal</h3>
+          <p class="text-xs text-slate-500">Ringkasan status tugas: In Progress, Selesai (Done), dan Overdue</p>
+        </div>
+        
+        <div class="flex gap-2">
+          <!-- Tombol Import Excel -->
+          <!-- Ubah tag <label> lama menjadi <button> seperti ini: -->
+          <button onclick="openImportDialogModal()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer">
+            📤 Import dari Excel
+          </button>
+          <button onclick="exportToExcel()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg shadow-sm flex items-center gap-1.5">
+            📥 Export ke Excel
+          </button>
+          <button onclick="window.print()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded-lg shadow-sm">🖨️ Cetak / PDF</button>
+          <button onclick="archiveSelectedTasks()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer">
+            📦 Arsipkan
+          </button>
+        </div>
+      </div>
+
+      <!-- Filter Kontrol -->
+      <div class="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+  
+        <!-- Kotak Pencarian Baru -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">🔍 Cari Rekap:</label>
+          <input type="text" id="report-search-input" onkeyup="renderPersonalReport()" placeholder="Cari judul, cabang, PIC..." class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+        </div>
+
+        <div>
+          <label for="report-member-select" class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">🔍 Pilih Anggota:</label>
+          <select id="report-member-select" onchange="renderPersonalReport()" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+            <option value="all">-- Semua Anggota (Ringkasan Tim) --</option>
+          </select>
+        </div>
+        <div>
+          <label for="report-status-select" class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">📌 Filter Status:</label>
+          <select id="report-status-select" onchange="renderPersonalReport()" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-medium focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+            <option value="all">-- Semua Status --</option>
+            <option value="Done">Selesai (Done)</option>
+            <option value="In Progress">In Progress</option>
+            <option value="pending_approval">Menunggu Approval</option>
+            <option value="rejected">Ditolak / Revisi</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">📅 Mulai Tanggal:</label>
+          <input type="date" id="filter-start-date" onchange="renderPersonalReport()" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">📅 Sampai Tanggal:</label>
+          <input type="date" id="filter-end-date" onchange="renderPersonalReport()" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+        </div>
+      </div>
+
+      <!-- Kotak Ringkasan Statistik -->
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-slate-50 p-3 rounded-lg border text-center">
+          <p id="report-label-total" class="text-xs text-slate-500">Total Tugas Tim</p>
+          <p id="report-total-tasks" class="text-xl font-bold text-slate-800">0</p>
+        </div>
+        <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-100 text-center">
+          <p class="text-xs text-emerald-600 font-medium">Tugas Selesai (Done)</p>
+          <p id="report-done-tasks" class="text-xl font-bold text-emerald-700">0</p>
+        </div>
+        <div class="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center">
+          <p class="text-xs text-blue-600 font-medium">Tingkat Penyelesaian</p>
+          <p id="report-rate" class="text-xl font-bold text-blue-700">0%</p>
+        </div>
+      </div>
+
+      <!-- Tabel Daftar Rekap -->
+      <div id="report-content" class="overflow-x-auto"></div>
+
+    </div>
+  </div>
+
+  <!-- Modal Dialog Import & Download Template Excel -->
+  <div id="import-dialog-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-100 animate-in fade-in zoom-in duration-150">
+      <div class="bg-indigo-600 px-5 py-4 flex items-center justify-between text-white">
+        <h3 class="font-bold text-base flex items-center gap-2">
+          <i class="fa-solid fa-file-excel"></i> Import & Template Excel
+        </h3>
+        <button onclick="closeImportDialogModal()" class="text-white/80 hover:text-white cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      
+      <div class="p-5 space-y-4">
+        <p class="text-xs text-slate-600">
+          Silakan unduh terlebih dahulu format template Excel di bawah ini agar data yang di-import terbaca dengan benar oleh sistem.
+        </p>
+
+        <!-- Tombol Download Template -->
+        <button type="button" onclick="downloadExcelTemplate()" class="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+          <i class="fa-solid fa-download"></i> Download Format Template Excel
+        </button>
+
+        <hr class="border-slate-100 my-2">
+
+        <!-- Area Upload File Excel -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">📂 Upload File Excel yang Telah Diisi:</label>
+          <input type="file" id="modal-excel-file-input" accept=".xlsx, .xls, .csv" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-slate-200 rounded-xl p-1 bg-slate-50">
+        </div>
+      </div>
+
+      <div class="bg-slate-50 px-5 py-3.5 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button type="button" onclick="closeImportDialogModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition cursor-pointer">Batal</button>
+        <button type="button" onclick="submitModalExcelImport()" class="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-sm cursor-pointer">Proses Import</button>
+      </div>
+    </div>
+  </div>
+
+    <!-- Modal Alih / Bagikan Tugas -->
+    <div id="transfer-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative">
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Alihkan Tugas</h2>
+        
+        <form id="transfer-form" onsubmit="handleTransferSubmit(event)">
+          <input type="hidden" id="transfer-task-id">
+          
+          <div class="mb-4">
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Alihkan Kepada Anggota</label>
+            <select id="transfer-member-select" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+              <option value="">Pilih Anggota Penerima</option>
+              <!-- Opsi diisi via JS -->
+            </select>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Catatan / Alasan Pengalihan</label>
+            <textarea id="transfer-note-input" rows="3" placeholder="Contoh: Tolong bantu selesaikan bagian desainnya ya..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></textarea>
+          </div>
+
+          <div class="flex justify-end space-x-3 mt-6 pt-4 border-t">
+            <button type="button" onclick="closeTransferModal()" class="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
+            <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow">Kirim Permintaan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  <script>
+    // KONFIGURASI SUPABASE
+    const SUPABASE_URL = 'https://zxechbcugbkajssdvrwt.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4ZWNoYmN1Z2JrYWpzc2R2cnd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5Njc0MTEsImV4cCI6MjEwNDU0MzQxMX0.cOrifHBYlPBaq2eACGgFvl7BFqYv_skPYrt1yc7RE08';
+
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let globalMembers = [];
+    let globalTasks = [];
+    let searchQuery = '';
+    let pastedFiles = []; // Diubah menjadi array untuk menampung banyak file paste
+    // --- SISTEM AUTENTIKASI ---
+    let currentUser = null;
+    // Variabel untuk melacak tampilan saat ini ('personal' atau 'team')
+    let currentView = 'personal'; 
+
+    // Fungsi Mengecek Status Login saat halaman dimuat
+    function checkAuth() {
+      const storedUser = localStorage.getItem('workload_user');
+      if (storedUser) {
+        currentUser = JSON.parse(storedUser);
+        
+        // === TAMBAHKAN KODE INI DI SINI ===
+        if (currentUser && currentUser.name) {
+          const tabNameEl = document.getElementById('tab-my-name');
+          if (tabNameEl) {
+            tabNameEl.innerText = `Tugas ${currentUser.name}`;
+          }
+        }
+        // ===================================
+
+        showDashboard();
+      } else {
+        showLogin();
+      }
+    }
+
+    // Menampilkan UI Dasbor
+    function showDashboard() {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('app-dashboard').classList.remove('hidden');
+      fetchDashboardData(); // Load data hanya jika sudah login
+    }
+
+    // Menampilkan UI Login
+    function showLogin() {
+      document.getElementById('login-screen').classList.remove('hidden');
+      document.getElementById('app-dashboard').classList.add('hidden');
+    }
+
+    // Proses Login
+    async function handleLogin(event) {
+      event.preventDefault();
+      const nikInput = document.getElementById('login-nik').value.trim();
+      const errorText = document.getElementById('login-error');
+      const btnLogin = document.getElementById('btn-login');
+
+      if (!nikInput) return;
+
+      // Ubah status tombol loading
+      btnLogin.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Memeriksa...`;
+      btnLogin.disabled = true;
+      errorText.classList.add('hidden');
+
+      try {
+        // Cari member berdasarkan NIK di Supabase (menggunakan maybeSingle agar tidak error jika kosong)
+        const { data: member, error } = await supabaseClient
+          .from('members')
+          .select('*')
+          .eq('nik', nikInput)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (member) {
+          // Login Berhasil! Simpan data user ke localStorage
+          localStorage.setItem('workload_user', JSON.stringify(member));
+          currentUser = member;
+          
+          // === TAMBAHKAN KODE INI DI SINI ===
+          const tabNameEl = document.getElementById('tab-my-name');
+          if (tabNameEl && currentUser.name) {
+            tabNameEl.innerText = `Tugas ${currentUser.name}`;
+          }
+          // ===================================
+
+          // Bersihkan input dan masuk dasbor
+          document.getElementById('login-nik').value = '';
+          showDashboard();
+        } else {
+          // NIK tidak ditemukan
+          errorText.classList.remove('hidden');
+        }
+      } catch (err) {
+        alert("Terjadi kesalahan sistem: " + err.message);
+      } finally {
+        // Kembalikan tombol ke semula
+        btnLogin.innerHTML = `Masuk ke Dashboard`;
+        btnLogin.disabled = false;
+      }
+    }
+
+    // Proses Logout
+    function logout() {
+      // Munculkan pop-up konfirmasi
+      const confirmLogout = confirm('Apakah Anda yakin ingin keluar dari Dasbor?');
+      
+      if (confirmLogout) {
+        // 1. Hapus data sesi user dari penyimpanan browser
+        localStorage.removeItem('workload_user');
+        
+        // 2. Kosongkan variabel currentUser
+        currentUser = null;
+        
+        // 3. Sembunyikan Dasbor dan tampilkan kembali layar Login
+        showLogin();
+      }
+    }
+
+    // --- JALANKAN CEK AUTH SAAT HALAMAN DIBUKA ---
+    // Hapus pemanggilan fetchDashboardData() yang ada di paling bawah script lama Anda, 
+    // ganti dengan ini:
+    checkAuth();
+
+
+    // Fungsi untuk berganti Tab
+    function switchView(viewType) {
+  currentView = viewType; 
+  
+  const tabPersonal = document.getElementById('tab-personal');
+  const tabTeam = document.getElementById('tab-team');
+  const tabReport = document.getElementById('tab-report');
+  
+  const statsSection = document.getElementById('team-stats-section');
+  const teamGrid = document.getElementById('team-grid'); // Kontainer kartu tugas tim/personal
+  const reportSection = document.getElementById('report-view-section'); // Kontainer rekap baru
+
+  // Reset semua tombol tab ke style tidak aktif
+  const inactiveClass = "px-5 py-2 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all";
+  const activeClass = "px-5 py-2 rounded-full text-sm font-bold bg-indigo-600 text-white shadow-md transition-all";
+
+  tabPersonal.className = inactiveClass;
+  tabTeam.className = inactiveClass;
+  tabReport.className = inactiveClass;
+
+  if (currentView === 'personal') {
+    tabPersonal.className = activeClass;
+    if (statsSection) statsSection.classList.add('hidden');
+    if (teamGrid) teamGrid.classList.remove('hidden');
+    if (reportSection) reportSection.classList.add('hidden');
+    renderDashboardGrid();
+
+  } else if (currentView === 'team') {
+    tabTeam.className = activeClass;
+    if (statsSection) statsSection.classList.remove('hidden');
+    if (teamGrid) teamGrid.classList.remove('hidden');
+    if (reportSection) reportSection.classList.add('hidden');
+    renderDashboardGrid();
+
+  } else if (currentView === 'report') {
+    tabReport.className = activeClass;
+    if (statsSection) statsSection.classList.add('hidden');
+    if (teamGrid) teamGrid.classList.add('hidden'); // Sembunyikan grid tugas biasa
+    if (reportSection) reportSection.classList.remove('hidden'); // Tampilkan halaman rekap
+    
+    // Jalankan fungsi pengisi dropdown anggota rekap & render tabelnya
+    if (typeof populateReportMemberSelect === 'function') populateReportMemberSelect();
+    renderPersonalReport();
+  }
+}
+
+    // --- PASTE IMAGE LISTENER (CTRL + V) UNTUK BANYAK GAMBAR ---
+    document.addEventListener('paste', function (event) {
+      const modal = document.getElementById('task-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        const clipboardData = event.clipboardData || window.clipboardData;
+        if (!clipboardData) return;
+
+        const items = clipboardData.items;
+        let hasImage = false;
+
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image') !== -1) {
+            const file = items[i].getAsFile();
+            if (!file) continue;
+
+            pastedFiles.push(file);
+            hasImage = true;
+          }
+        }
+
+        if (hasImage) {
+          updatePastedPreviews();
+        }
+      }
+    });
+
+    // Fungsi memperbarui tampilan pratinjau gambar-gambar yang di-paste
+    function updatePastedPreviews() {
+      const previewBox = document.getElementById('paste-preview-container');
+      const previewList = document.getElementById('paste-preview-list');
+      const countEl = document.getElementById('pasted-count');
+      const fileInput = document.getElementById('task-attachment-file');
+
+      if (!previewBox || !previewList) return;
+
+      if (pastedFiles.length === 0) {
+        previewBox.style.display = 'none';
+        previewBox.classList.add('hidden');
+        previewList.innerHTML = '';
+        if (fileInput) fileInput.value = '';
+        return;
+      }
+
+      previewBox.style.display = 'block';
+      previewBox.classList.remove('hidden');
+      if (countEl) countEl.innerText = pastedFiles.length;
+
+      previewList.innerHTML = pastedFiles.map((file, index) => {
+        const objectUrl = URL.createObjectURL(file);
+        return `
+          <div class="relative group w-20 h-20 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden shrink-0">
+            <img src="${objectUrl}" alt="Preview" class="w-full h-full object-cover">
+            <button type="button" onclick="removeSinglePastedImage(${index})" class="absolute top-1 right-1 bg-rose-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center opacity-80 hover:opacity-100 transition shadow" title="Hapus gambar ini">✕</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Menghapus salah satu gambar yang di-paste berdasarkan indeksnya
+    function removeSinglePastedImage(index) {
+      pastedFiles.splice(index, 1);
+      updatePastedPreviews();
+    }
+
+    // Menghapus seluruh gambar tempelan
+    function clearAllPastedImages() {
+      pastedFiles = [];
+      updatePastedPreviews();
+    }
+
+    // Alias agar fungsi pembersih lama tetap aman dipanggil dari modal/reset
+    function clearPastedImage() {
+      clearAllPastedImages();
+    }
+
+    // 1. Fungsi Pembantu Menghitung Skor Urgensi Tugas
+    function getTaskUrgencyScore(task) {
+      let score = 0;
+
+      // Nilai Dasar dari Tingkat Prioritas
+      if (task.priority === 'Super') {
+        score += 1000; // Paling prioritas / paling atas
+      } else if (task.priority === 'High') {
+        score += 300;
+      } else if (task.priority === 'Medium') {
+        score += 200;
+      } else {
+        score += 100; // Low
+      }
+
+      // Nilai Tambahan berdasarkan Tanggal Deadline
+      if (task.due_date) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dueDate = new Date(task.due_date);
+        dueDate.setHours(0, 0, 0, 0);
+
+        const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+          score += 2000 + Math.abs(diffDays) * 10; // Overdue paling mendesak
+        } else if (diffDays === 0) {
+          score += 1000; // Hari ini
+        } else if (diffDays === 1) {
+          score += 500;  // Besok
+        } else {
+          score += Math.max(0, 200 - (diffDays * 10)); // Semakin dekat hari semakin besar skornya
+        }
+      }
+
+      return score;
+    }
+
+    // --- KONTROL MODAL ANGGOTA ---
+    function openMemberListModal() {
+      renderMemberListUI();
+      document.getElementById('member-list-modal').classList.remove('hidden');
+      document.getElementById('member-list-modal').classList.add('flex');
+    }
+
+    function closeMemberListModal() {
+      document.getElementById('member-list-modal').classList.add('hidden');
+      document.getElementById('member-list-modal').classList.remove('flex');
+    }
+
+    function openMemberModal() {
+      document.getElementById('member-form').reset();
+      document.getElementById('member-modal').classList.remove('hidden');
+      document.getElementById('member-modal').classList.add('flex');
+    }
+
+    function closeMemberModal() {
+      document.getElementById('member-modal').classList.add('hidden');
+      document.getElementById('member-modal').classList.remove('flex');
+    }
+
+    function getInitials(name) {
+      if (!name) return 'US';
+      const parts = name.trim().split(/\s+/);
+      if (parts.length === 1) {
+        return parts[0].substring(0, 2).toUpperCase();
+      }
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    async function handleSaveMember(event) {
+      event.preventDefault();
+      const name = document.getElementById('new-member-name').value.trim();
+      const role = document.getElementById('new-member-role').value.trim();
+      const nik = document.getElementById('new-member-nik').value.trim(); // TAMBAHAN NIK
+
+      if (!name || !nik) return;
+
+      const avatar_initials = getInitials(name);
+
+      const { error } = await supabaseClient
+        .from('members')
+        .insert([{ nik: nik, name: name, role: role, avatar_initials: avatar_initials }]); // Masukkan NIK
+
+      if (error) {
+        // Tangkap error jika NIK sudah dipakai orang lain
+        if(error.code === '23505') { 
+          alert('Gagal: NIK tersebut sudah terdaftar di sistem!');
+        } else {
+          alert('Gagal menambah anggota: ' + error.message);
+        }
+      } else {
+        alert('Anggota tim berhasil ditambahkan!');
+        closeMemberModal();
+        fetchDashboardData();
+      }
+    }
+
+    function renderMemberListUI() {
+      const container = document.getElementById('member-list-container');
+      if (!container) return;
+
+      if (globalMembers.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 italic col-span-full">Belum ada anggota tim.</p>`;
+        return;
+      }
+
+      container.innerHTML = globalMembers.map(m => {
+        const initials = m.avatar_initials || getInitials(m.name);
+        return `
+          <div class="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+            <div class="flex items-center gap-2 overflow-hidden">
+              <div class="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                ${initials}
+              </div>
+              <div class="truncate">
+                <p class="text-xs font-semibold text-slate-800 leading-none truncate">${m.name}</p>
+                <p class="text-[10px] text-slate-400 leading-tight mt-0.5 truncate">${m.role || 'Member'}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 border-l pl-2 border-slate-200 shrink-0">
+              <button onclick="openEditMemberModal(${m.id})" title="Edit Anggota" class="text-slate-400 hover:text-indigo-600 text-xs p-1">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <button onclick="deleteMember(${m.id}, '${m.name}')" title="Hapus Anggota" class="text-slate-400 hover:text-rose-600 text-xs p-1">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openEditMemberModal(memberId) {
+      const member = globalMembers.find(m => m.id == memberId);
+      if (!member) return;
+
+      document.getElementById('edit-member-id').value = member.id;
+      document.getElementById('edit-member-original-nik').value = member.nik;
+      document.getElementById('edit-member-name').value = member.name;
+      document.getElementById('edit-member-role').value = member.role || '';
+      document.getElementById('edit-member-nik').value = member.nik; // Menggunakan ID yang sudah diperbaiki
+      document.getElementById('edit-member-modal').classList.remove('hidden');
+      document.getElementById('edit-member-modal').classList.add('flex');
+    }
+
+    function closeEditMemberModal() {
+      document.getElementById('edit-member-modal').classList.add('hidden');
+      document.getElementById('edit-member-modal').classList.remove('flex');
+    }
+
+    async function handleUpdateMember(e) {
+      e.preventDefault();
+      const id = document.getElementById('edit-member-id').value;
+      const originalNik = document.getElementById('edit-member-original-nik').value;
+      const name = document.getElementById('edit-member-name').value;
+      const role = document.getElementById('edit-member-role').value;
+      const newNik = document.getElementById('edit-member-nik').value; // Menggunakan ID yang sudah diperbaiki
+
+      if (!name) return;
+
+      const avatar_initials = getInitials(name);
+
+      const { error } = await supabaseClient
+        .from('members')
+        .update({ name: name, role: role, avatar_initials: avatar_initials })
+        .eq('id', id);
+
+      if (error) {
+        alert('Gagal memperbarui anggota: ' + error.message);
+      } else {
+        alert('Data anggota berhasil diperbarui!');
+        closeEditMemberModal();
+        fetchDashboardData();
+      }
+    }
+
+    async function deleteMember(memberId, memberName) {
+      if (confirm(`Apakah Anda yakin ingin menghapus "${memberName}" dari tim?`)) {
+        const { error } = await supabaseClient
+          .from('members')
+          .delete()
+          .eq('id', memberId);
+
+        if (error) {
+          alert('Gagal menghapus anggota: ' + error.message);
+        } else {
+          alert('Anggota berhasil dihapus!');
+          fetchDashboardData();
+        }
+      }
+    }
+
+    // --- LOGIKA UTAMA DASHBOARD ---
+    function getTaskStatus(task) {
+      if (task.status === 'Done') return { key: 'Done', label: 'Done', bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' };
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const due = task.due_date ? new Date(task.due_date) : null;
+      if (due) due.setHours(0, 0, 0, 0);
+
+      if (due && due < today) {
+        return { key: 'Overdue', label: 'Overdue', bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200' };
+      }
+      return { key: 'In Progress', label: 'In Progress', bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' };
+    }
+
+
+    function handleSearch() {
+      searchQuery = document.getElementById('search-input').value.toLowerCase();
+      renderDashboardGrid();
+    }
+
+    async function fetchDashboardData() {
+      const { data: members, error: mError } = await supabaseClient.from('members').select('*').order('id');
+      const { data: tasks, error: tError } = await supabaseClient.from('tasks').select('*');
+
+      if (mError || tError) {
+        console.error('Error mengambil data:', mError || tError);
+        return;
+      }
+
+      globalMembers = members || [];
+      globalTasks = tasks || [];
+      
+      populateMemberDropdown();
+      renderMemberListUI();
+      renderDashboardGrid();
+    }
+
+    function renderTaskItemForPersonal(t) {
+      const st = getTaskStatus(t);
+
+      // --- PENENTUAN BADGE & WARNA KARTU BERDASARKAN PRIORITAS ---
+      let priorityDot = '';
+      let cardBorderClass = 'border-indigo-200'; 
+      let cardHeaderClass = 'bg-indigo-600 text-white';    
+
+      if (t.priority === 'Super') {
+        priorityDot = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-rose-700 px-2 py-0.5 rounded-full animate-pulse"><span class="w-1.5 h-1.5 rounded-full bg-white"></span>🔥 Super</span>`;
+        cardBorderClass = 'border-rose-500 border-2 shadow-lg';
+        cardHeaderClass = 'bg-rose-600 text-white'; 
+      } else if (t.priority === 'High') {
+        priorityDot = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>High</span>`;
+        cardHeaderClass = 'bg-indigo-600 text-white'; 
+      } else if (t.priority === 'Medium') {
+        priorityDot = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Med</span>`;
+        cardHeaderClass = 'bg-indigo-600 text-white'; 
+      } else {
+        priorityDot = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Low</span>`;
+        cardHeaderClass = 'bg-indigo-600 text-white'; 
+      }
+
+      let transferUI = '';
+      let actionIcons = '';
+
+      if (t.transfer_status === 'pending_approval') {
+        if (currentUser && t.transferred_to == currentUser.id) {
+          transferUI = `
+            <div class="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+              <p class="text-[10px] font-bold text-amber-800 mb-1">Permintaan Alih Tugas:</p>
+              <p class="text-[10px] text-slate-600 italic mb-2">"${t.transfer_note || '-'}"</p>
+              <div class="flex gap-1.5">
+                <button onclick="approveTransfer('${t.id}', '${t.transferred_to}')" class="flex-1 py-1.5 bg-emerald-500 text-white rounded font-medium text-[10px] shadow-sm hover:bg-emerald-600">Terima</button>
+                <button onclick="rejectTransfer('${t.id}')" class="flex-1 py-1.5 bg-rose-500 text-white rounded font-medium text-[10px] shadow-sm hover:bg-rose-600">Tolak</button>
+              </div>
+            </div>
+          `;
+        } else {
+          let targetName = 'Anggota';
+          if (t.transferred_to) {
+            const targetMember = globalMembers.find(m => m.id == t.transferred_to || m.name === t.transferred_to);
+            if (targetMember) {
+              targetName = targetMember.name;
+            } else {
+              targetName = t.transferred_to; 
+            }
+          }
+
+          transferUI = `
+            <div class="mt-2 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1.5 rounded border border-amber-200 text-center">
+              ⏳ Menunggu Persetujuan: <span class="underline">${targetName}</span>
+            </div>
+          `;
+        }
+      } else if (t.transfer_status === 'rejected') {
+        transferUI = `
+          <div class="mt-2 p-2 bg-rose-50 border border-rose-200 rounded-lg text-[10px]">
+            <p class="font-bold text-rose-800 mb-0.5">Alih Tugas Ditolak!</p>
+            <p class="text-slate-600 italic">"${t.transfer_note || '-'}"</p>
+            <button onclick="clearTransferStatus('${t.id}')" class="mt-1.5 text-indigo-600 hover:underline font-semibold">Tutup Info</button>
+          </div>
+        `;
+      }
+
+      const isOwner = currentUser && currentUser.id == t.member_id;
+      const isPutri = currentUser && currentUser.id == 10;
+
+      // Hapus kondisi 'if (t.transfer_status !== 'pending_approval')' agar tombol tetap muncul
+      if (isOwner || isPutri) {
+        actionIcons = `
+          <button onclick="completeTask(${t.id})" title="Selesai" class="p-1 text-slate-400 hover:text-emerald-600 transition"><i class="fa-solid fa-check text-xs"></i></button>
+          <button onclick="openEditModal(${t.id})" title="Edit" class="p-1 text-slate-400 hover:text-indigo-600 transition"><i class="fa-solid fa-pen text-xs"></i></button>
+          <button onclick="deleteTask(${t.id})" title="Hapus" class="p-1 text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash text-xs"></i></button>
+          <button onclick="openTransferModal(${t.id})" title="Alihkan Tugas" class="text-xs px-2 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded font-semibold flex items-center gap-1 transition">🔄 Alihkan</button>
+        `;
+      }
+      
+      let attachmentUI = '';
+      if (t.attachment_url) {
+        let urls = t.attachment_url.includes(',') ? t.attachment_url.split(',') : [t.attachment_url];
+        
+        attachmentUI = `
+          <div class="flex items-center gap-1.5 flex-wrap">
+            ${urls.map((u, idx) => {
+              let cleanUrl = u.trim();
+              let isImage = cleanUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+              let isOfficeOrPdf = cleanUrl.match(/\.(xlsx|xls|docx|doc|pptx|ppt|pdf)$/i);
+
+              if (isImage) {
+                return `
+                  <a href="${cleanUrl}" target="_blank" class="w-6 h-6 inline-flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md border border-indigo-200 transition" title="Lihat Gambar ${idx + 1}">
+                    <i class="fa-solid fa-image text-[10px]"></i>
+                  </a>
+                `;
+              } else if (isOfficeOrPdf) {
+                let previewUrl = cleanUrl;
+                if (cleanUrl.match(/\.(xlsx|xls|docx|doc|pptx|ppt)$/i)) {
+                  previewUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(cleanUrl)}`;
+                }
+
+                return `
+                  <div class="inline-flex items-center bg-indigo-50 border border-indigo-200 rounded-md overflow-hidden text-xs">
+                    <a href="${previewUrl}" target="_blank" class="w-6 h-6 inline-flex items-center justify-center text-indigo-600 hover:bg-indigo-100 transition" title="Pratinjau Dokumen">
+                      <i class="fa-solid fa-eye text-[10px]"></i>
+                    </a>
+                    <a href="${cleanUrl}" target="_blank" download class="w-6 h-6 inline-flex items-center justify-center bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition border-l border-indigo-200" title="Unduh File">
+                      <i class="fa-solid fa-download text-[10px]"></i>
+                    </a>
+                  </div>
+                `;
+              } else {
+                return `
+                  <a href="${cleanUrl}" target="_blank" class="w-6 h-6 inline-flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md border border-indigo-200 transition" title="Buka Lampiran">
+                    <i class="fa-solid fa-paperclip text-[10px]"></i>
+                  </a>
+                `;
+              }
+            }).join('')}
+          </div>
+        `;
+      }
+
+      // Kondisi tombol Lihat Selengkapnya (jika judul panjang > 50 karakter)
+      const isLongTitlePersonal = t.title && t.title.length > 50;
+      const readMoreBtnPersonal = isLongTitlePersonal ? `
+        <button onclick="toggleReadMore(${t.id})" id="btn-more-${t.id}" class="text-[10px] text-indigo-600 hover:underline font-semibold cursor-pointer mt-0.5">
+          ▾ Lihat Selengkapnya
+        </button>
+      ` : '';
+
+      return `
+        <div class="bg-white rounded-xl border ${cardBorderClass} shadow-xs overflow-hidden flex flex-col justify-between transition hover:shadow-md">
+          
+          <!-- HEADER KARTU -->
+          <div class="${cardHeaderClass} px-3 py-2.5 border-b flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              ${priorityDot}
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-md ${st.bg} ${st.text}">${st.label}</span>
+            </div>
+            ${getDeadlineBadge(t.due_date, false)}
+          </div>
+
+          <!-- KONTEN TENGAH -->
+          <div class="p-4 flex-1">
+            <div class="flex items-center justify-between mb-1">
+              <div class="text-[9px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                <i class="fa-solid fa-store text-[8px]"></i> ${t.cabang || '-'}
+              </div>
+              <div class="text-[9px] font-medium text-slate-400 flex items-center gap-1">
+                <i class="fa-regular fa-calendar text-[8px]"></i> ${t.tanggal_pengajuan || '-'}
+              </div>
+            </div>
+
+            <div>
+              <h3 id="task-title-${t.id}" class="font-bold text-slate-800 text-sm leading-snug line-clamp-3 mb-0.5">
+                ${t.title}
+              </h3>
+              ${readMoreBtnPersonal}
+            </div>
+
+            ${t.notes ? `
+              <p class="text-[11px] text-rose-600 bg-rose-50/60 p-2 rounded-lg border border-rose-100 mt-2 italic flex justify-between items-center">
+                <span>💬 "${t.notes}"</span>
+                <button onclick="openNoteModal(${t.id})" class="text-[10px] font-bold text-slate-400 hover:text-slate-700 ml-1">Edit</button>
+              </p>
+            ` : ''}
+
+          <!-- FOOTER KARTU -->
+          <div class="bg-slate-50 p-3 border-t border-slate-100">
+            ${transferUI}
+
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                ${attachmentUI}
+              </div>
+              <div class="flex items-center gap-1">
+                ${actionIcons}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+}
+    
+  // Fungsi untuk membuka/menutup teks judul tugas yang panjang
+  function toggleReadMore(taskId) {
+    const titleEl = document.getElementById(`task-title-${taskId}`);
+    const btnEl = document.getElementById(`btn-more-${taskId}`);
+    
+    if (!titleEl || !btnEl) return;
+
+    if (titleEl.classList.contains('line-clamp-3')) {
+      titleEl.classList.remove('line-clamp-3');
+      btnEl.innerText = '▴ Tutup Sebagian';
+    } else {
+      titleEl.classList.add('line-clamp-3');
+      btnEl.innerText = '▾ Lihat Selengkapnya';
+    }
+  }
+
+   function renderDashboardGrid() {
+      let lowCount = 0, medCount = 0, highCount = 0;
+      const grid = document.getElementById('team-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      let matchedCards = 0;
+
+      // ==========================================
+      // KODE KHUSUS: JIKA DI TAB "TUGAS SAYA" (PERSONAL) - GRID PENUH
+      // ==========================================
+      if (currentView === 'personal' && currentUser) {
+        grid.className = "px-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 w-full";
+
+        const myTasks = globalTasks.filter(t => {
+          // Sembunyikan tugas yang sudah selesai (Done) di tab personal
+          if (t.status === 'Done') return false;
+
+          const isOwner = t.member_id === currentUser.id;
+          const isReceiverPending = t.transfer_status === 'pending_approval' && t.transferred_to == currentUser.id;
+          const isSenderDelegating = t.transfer_status === 'pending_approval' && t.member_id === currentUser.id;
+          
+          if (!isOwner && !isReceiverPending && !isSenderDelegating) return false;
+          if (!searchQuery) return true;
+          return t.title.toLowerCase().includes(searchQuery);
+        });
+
+        myTasks.sort((a, b) => {
+        // 0. SUPER PRIORITY HARUS SELALU DI ATAS SEGALANYA
+        const aIsSuper = (a.priority === 'Super');
+        const bIsSuper = (b.priority === 'Super');
+        if (aIsSuper && !bIsSuper) return -1;
+        if (!aIsSuper && bIsSuper) return 1;
+
+        // 1. CEK APPROVAL / PENERUSAN TUGAS (Naikkan ke atas setelah Super)
+        const aNeedsApproval = (a.transfer_status === 'pending_approval');
+        const bNeedsApproval = (b.transfer_status === 'pending_approval');
+
+        if (aNeedsApproval && !bNeedsApproval) return -1; 
+        if (!aNeedsApproval && bNeedsApproval) return 1;  
+
+        // 2. CEK STATUS DONE (Lempar ke paling bawah)
+        if (a.status === 'Done' && b.status !== 'Done') return 1;
+        if (a.status !== 'Done' && b.status === 'Done') return -1;
+        
+        // 3. SISANYA urutkan berdasarkan skor urgensi & deadline
+        return getTaskUrgencyScore(b) - getTaskUrgencyScore(a);
+      });
+
+        myTasks.forEach(t => {
+          const taskCardHTML = renderTaskItemForPersonal(t);
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = taskCardHTML;
+          grid.appendChild(tempDiv.firstElementChild);
+        });
+        
+        return;
+      }
+
+      // ==========================================
+      // JIKA DI TAB "ALL TIM" (TEAM) - KOLOM ANGGOTA
+      // ==========================================
+      grid.className = "px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6";
+
+      const sortedMembers = [...globalMembers].sort((a, b) => {
+        const tasksA = globalTasks.filter(t => t.member_id === a.id && t.status !== 'Done').length;
+        const tasksB = globalTasks.filter(t => t.member_id === b.id && t.status !== 'Done').length;
+        return tasksB - tasksA; 
+      });
+
+      sortedMembers.forEach(member => {
+        const isMemberMatch = member.name.toLowerCase().includes(searchQuery) || (member.role && member.role.toLowerCase().includes(searchQuery));
+        
+        const memberTasks = globalTasks.filter(t => {
+          const isOwner = t.member_id === member.id;
+          const isReceiver = t.transfer_status === 'pending_approval' && t.transferred_to == member.id;
+          
+          if (!isOwner && !isReceiver) return false;
+          if (!searchQuery) return true;
+          return isMemberMatch || t.title.toLowerCase().includes(searchQuery);
+        });
+
+        let activeTasks = memberTasks.filter(t => t.status !== 'Done').sort((a, b) => {
+          // 0. SUPER PRIORITY HARUS SELALU DI ATAS SEGALANYA
+          const aIsSuper = (a.priority === 'Super');
+          const bIsSuper = (b.priority === 'Super');
+          if (aIsSuper && !bIsSuper) return -1;
+          if (!aIsSuper && bIsSuper) return 1;
+
+          // 1. CEK APPROVAL / PENERUSAN TUGAS
+          const aNeedsApproval = (a.transfer_status === 'pending_approval');
+          const bNeedsApproval = (b.transfer_status === 'pending_approval');
+
+          if (aNeedsApproval && !bNeedsApproval) return -1;
+          if (!aNeedsApproval && bNeedsApproval) return 1;
+
+          // 2. SISANYA urutkan berdasarkan skor urgensi & deadline
+          return getTaskUrgencyScore(b) - getTaskUrgencyScore(a);
+        });
+
+        const completedTasks = memberTasks.filter(t => t.status === 'Done');
+
+        if (searchQuery && memberTasks.length === 0 && !isMemberMatch) return;
+
+        matchedCards++;
+        const activeCount = globalTasks.filter(t => t.member_id === member.id && t.status !== 'Done').length;
+
+        let badgeHTML = '';
+        let countColor = '';
+        if (activeCount >= 5) {
+          highCount++;
+          countColor = 'text-rose-600';
+          badgeHTML = `<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200">Overload</span>`;
+        } else if (activeCount >= 3) {
+          medCount++;
+          countColor = 'text-amber-600';
+          badgeHTML = `<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">Medium</span>`;
+        } else {
+          lowCount++;
+          countColor = 'text-emerald-600';
+          badgeHTML = `<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">Low Load</span>`;
+        }
+
+        let activeTasksHTML = '';
+
+        if (activeTasks.length === 0) {
+          activeTasksHTML = `<p class="text-xs text-slate-400 italic py-2 text-center">Tidak ada tugas aktif</p>`;
+        } else {
+          const renderTaskItem = (t) => {
+            const st = getTaskStatus(t);
+
+            // --- PENENTUAN BADGE & WARNA KARTU BERDASARKAN PRIORITAS (ALL TIM) ---
+            let priorityDot = '';
+            let cardBorderClass = 'border-slate-200/70'; 
+            let cardHeaderClass = 'bg-indigo-600 text-white';    
+
+            if (t.priority === 'Super') {
+              priorityDot = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-rose-700 px-2 py-0.5 rounded-full animate-pulse"><span class="w-1.5 h-1.5 rounded-full bg-white"></span>🔥 Super</span>`;
+              cardBorderClass = 'border-rose-500 border-2 shadow-md';
+              cardHeaderClass = 'bg-rose-600 text-white'; // Hanya Super yang merah
+            } else if (t.priority === 'High') {
+              priorityDot = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>High</span>`;
+              cardHeaderClass = 'bg-indigo-600 text-white'; // High pakai biru
+            } else if (t.priority === 'Medium') {
+              priorityDot = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Med</span>`;
+              cardHeaderClass = 'bg-indigo-600 text-white'; // Medium pakai biru
+            } else {
+              priorityDot = `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Low</span>`;
+              cardHeaderClass = 'bg-indigo-600 text-white'; // Low pakai biru
+            }
+
+            let transferUI = '';
+
+            if (t.transfer_status === 'pending_approval') {
+              if (t.transferred_to == member.id) {
+                if (currentUser && currentUser.id == t.transferred_to) {
+                  transferUI = `
+                    <div class="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p class="text-[10px] font-bold text-amber-800 mb-1">Penerusan Tugas:</p>
+                      <p class="text-[10px] text-slate-600 italic mb-2">"${t.transfer_note || '-'}"</p>
+                      <div class="flex gap-1.5">
+                        <button onclick="approveTransfer('${t.id}', '${t.transferred_to}')" class="flex-1 py-1.5 bg-emerald-500 text-white rounded font-medium text-[10px] shadow-sm hover:bg-emerald-600">Terima</button>
+                        <button onclick="rejectTransfer('${t.id}')" class="flex-1 py-1.5 bg-rose-500 text-white rounded font-medium text-[10px] shadow-sm hover:bg-rose-600">Tolak</button>
+                      </div>
+                    </div>
+                  `;
+                } else {
+                  transferUI = `<div class="mt-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1.5 rounded border border-amber-200 text-center">⏳ Menunggu Persetujuan Penerima</div>`;
+                }
+              } else {
+                transferUI = `<div class="mt-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1.5 rounded border border-amber-200 text-center">⏳ Menunggu Persetujuan</div>`;
+              }
+            } else if (t.transfer_status === 'rejected') {
+              transferUI = `
+                <div class="mt-2 p-2 bg-rose-50 border border-rose-200 rounded-lg text-[10px]">
+                  <p class="font-bold text-rose-800 mb-0.5">Penolakan Tugas!</p>
+                  <p class="text-slate-600 italic">"${t.transfer_note || '-'}"</p>
+                  <button onclick="clearTransferStatus('${t.id}')" class="mt-1.5 text-indigo-600 hover:underline font-semibold">Tutup Info</button>
+                </div>
+              `;
+            }
+            
+            let actionIcons = '';
+            const isOwner = currentUser && currentUser.id == t.member_id;
+            const isPutri = currentUser && currentUser.id == 10;
+
+            if (isOwner || isPutri) {
+              actionIcons = `
+                <button onclick="completeTask(${t.id})" title="Selesai" class="p-1 text-slate-400 hover:text-emerald-600 transition"><i class="fa-solid fa-check text-xs"></i></button>
+                <button onclick="openEditModal(${t.id})" title="Edit" class="p-1 text-slate-400 hover:text-indigo-600 transition"><i class="fa-solid fa-pen text-xs"></i></button>
+                <button onclick="deleteTask(${t.id})" title="Hapus" class="p-1 text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash text-xs"></i></button>
+                <button onclick="openTransferModal(${t.id})" title="Alihkan Tugas" class="text-xs px-2 py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded font-semibold flex items-center gap-1 transition">🔄 Alihkan</button>
+              `;
+            }
+
+            let attachmentUI = '';
+            if (t.attachment_url) {
+              let urls = t.attachment_url.includes(',') ? t.attachment_url.split(',') : [t.attachment_url];
+              
+              attachmentUI = `
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  ${urls.map((u, idx) => {
+                    let cleanUrl = u.trim();
+                    let isImage = cleanUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i);
+                    let isOfficeOrPdf = cleanUrl.match(/\.(xlsx|xls|docx|doc|pptx|ppt|pdf)$/i);
+
+                    if (isImage) {
+                      return `
+                        <a href="${cleanUrl}" target="_blank" class="w-6 h-6 inline-flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md border border-indigo-200 transition" title="Lihat Gambar ${idx + 1}">
+                          <i class="fa-solid fa-image text-[10px]"></i>
+                        </a>
+                      `;
+                    } else if (isOfficeOrPdf) {
+                      let previewUrl = cleanUrl;
+                      if (cleanUrl.match(/\.(xlsx|xls|docx|doc|pptx|ppt)$/i)) {
+                        previewUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(cleanUrl)}`;
+                      }
+
+                      return `
+                        <div class="inline-flex items-center bg-indigo-50 border border-indigo-200 rounded-md overflow-hidden text-xs">
+                          <a href="${previewUrl}" target="_blank" class="w-6 h-6 inline-flex items-center justify-center text-indigo-600 hover:bg-indigo-100 transition" title="Pratinjau Dokumen">
+                            <i class="fa-solid fa-eye text-[10px]"></i>
+                          </a>
+                          <a href="${cleanUrl}" target="_blank" download class="w-6 h-6 inline-flex items-center justify-center bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition border-l border-indigo-200" title="Unduh File">
+                            <i class="fa-solid fa-download text-[10px]"></i>
+                          </a>
+                        </div>
+                      `;
+                    } else {
+                      return `
+                        <a href="${cleanUrl}" target="_blank" class="w-6 h-6 inline-flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md border border-indigo-200 transition" title="Buka Lampiran">
+                          <i class="fa-solid fa-paperclip text-[10px]"></i>
+                        </a>
+                      `;
+                    }
+                  }).join('')}
+                </div>
+              `;
+            }
+
+            const isLongTitleTeam = t.title && t.title.length > 50;
+            const readMoreBtnTeam = isLongTitleTeam ? `
+              <button onclick="toggleReadMore(${t.id})" id="btn-more-${t.id}" class="text-[10px] text-indigo-600 hover:underline font-semibold cursor-pointer mt-0.5">
+                ▾ Lihat Selengkapnya
+              </button>
+            ` : '';
+
+            return `
+              <div class="group relative bg-white rounded-xl border-2 ${cardBorderClass} hover:shadow-md transition-all duration-200 mb-2.5 overflow-hidden flex flex-col justify-between">
+                
+                <div class="${cardHeaderClass} px-3 py-2.5 border-b flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-1.5">
+                    ${priorityDot}
+                    <span class="text-[10px] font-medium px-2 py-0.5 rounded-md ${st.bg} ${st.text}">${st.label}</span>
+                  </div>
+                  ${getDeadlineBadge(t.due_date, false)}
+                </div>
+
+                <div class="px-3.5 py-3 bg-white border-x border-slate-100 flex-1">
+                  <!-- INFO CABANG & TANGGAL PENGAJUAN DI ATAS JUDUL (UKURAN 9px) -->
+                  <div class="flex items-center justify-between mb-1">
+                    <div class="text-[9px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                      <i class="fa-solid fa-store text-[8px]"></i> ${t.cabang || '-'}
+                    </div>
+                    <div class="text-[9px] font-medium text-slate-400 flex items-center gap-1">
+                      <i class="fa-regular fa-calendar text-[8px]"></i> ${t.tanggal_pengajuan || '-'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 id="task-title-${t.id}" class="text-xs font-semibold text-slate-800 group-hover:text-indigo-600 transition line-clamp-3 mb-0.5">${t.title}</h4>
+                    ${readMoreBtnTeam}
+                  </div>
+
+                  ${t.notes ? `<p class="text-[11px] text-rose-600 bg-rose-50/60 p-2 rounded-lg border border-rose-100 mt-2 italic flex justify-between items-center">
+                    <span>💬 "${t.notes}"</span>
+                    <button onclick="openNoteModal(${t.id})" class="text-[10px] font-bold text-slate-400 hover:text-slate-700 ml-1">Edit</button>
+                  </p>` : ''}
+                  
+                  ${transferUI}
+                </div>
+
+                <div class="bg-indigo-100 px-3 py-2 border-t border-indigo-200 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    ${attachmentUI}
+                  </div>
+                  <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
+                    ${actionIcons}
+                  </div>
+                </div>
+
+              </div>
+            `;
+          };
+
+          const mainTasks = activeTasks.slice(0, 5);
+          const hiddenTasks = activeTasks.slice(5);
+
+          activeTasksHTML = mainTasks.map(t => renderTaskItem(t)).join('');
+
+          if (hiddenTasks.length > 0) {
+            activeTasksHTML += `
+              <details class="group mt-2 border-t border-dashed border-slate-200 pt-2">
+                <summary class="text-xs font-bold text-indigo-600 cursor-pointer flex justify-between items-center select-none py-1.5 px-2 bg-indigo-50/70 hover:bg-indigo-100/70 rounded-lg transition">
+                  <span>📂 Lihat ${hiddenTasks.length} tugas aktif lainnya...</span>
+                  <span class="text-[10px] transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="mt-2 pl-0.5">
+                  ${hiddenTasks.map(t => renderTaskItem(t)).join('')}
+                </div>
+              </details>
+            `;
+          }
+        }
+
+        let completedTasksHTML = completedTasks.length === 0 ? '' : `
+          <details class="group mt-3 pt-3 border-t border-slate-100">
+            <summary class="text-xs font-semibold text-slate-500 cursor-pointer flex justify-between items-center select-none hover:text-slate-700">
+              <span>Selesai (${completedTasks.length})</span>
+              <span class="text-[10px] transition group-open:rotate-180">▼</span>
+            </summary>
+            <div class="space-y-2 mt-2">
+              ${completedTasks.map(t => {
+                let attachmentBtn = '';
+                if (t.attachment_url) {
+                  let urls = t.attachment_url.includes(',') ? t.attachment_url.split(',') : [t.attachment_url];
+                  attachmentBtn = `<a href="${urls[0].trim()}" target="_blank" title="Lihat Lampiran" class="text-indigo-600 hover:text-indigo-800 transition p-1"><i class="fa-solid fa-paperclip text-xs"></i></a>`;
+                }
+
+                return `
+                  <div class="p-2.5 bg-slate-100/70 rounded-lg border border-slate-200 flex items-center justify-between opacity-75">
+                    <div>
+                      <h4 class="text-xs text-slate-500 line-through">${t.title}</h4>
+                      ${t.notes ? `<p class="text-[10px] text-slate-400 italic">💬 ${t.notes}</p>` : ''}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-[10px] text-emerald-600 font-semibold px-2 py-0.5 bg-emerald-50 rounded">✓ Done</span>
+                      <div class="flex items-center gap-1">
+                        ${attachmentBtn}
+                        <button onclick="openEditModal(${t.id})" title="Edit Tugas" class="text-slate-300 hover:text-indigo-600 transition p-1">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                        <button onclick="deleteTask(${t.id})" title="Hapus Tugas" class="text-slate-300 hover:text-rose-600 transition p-1">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </details>
+        `;
+
+        const card = `
+          <div class="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden flex flex-col">
+            
+            <div class="p-4 border-b border-indigo-200 flex items-center justify-between bg-indigo-600 text-white">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-white text-indigo-700 font-bold flex items-center justify-center text-sm shadow-sm">
+                  ${member.avatar_initials || 'US'}
+                </div>
+                <div>
+                  <h3 class="font-bold text-white text-sm">${member.name}</h3>
+                  <p class="text-xs text-indigo-100">${member.role || 'Member'}</p>
+                </div>
+              </div>
+              <div class="bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full text-xs font-semibold text-white">
+                ${badgeHTML.includes('Overload') ? 'Overload' : (badgeHTML.includes('Medium') ? 'Medium' : 'Low Load')}
+              </div>
+            </div>
+            
+            <div class="p-4 flex-1">
+              <div class="space-y-3">${activeTasksHTML}</div>
+              ${completedTasksHTML}
+            </div>
+            
+            <div class="px-4 py-2 bg-slate-50 border-t border-slate-100 text-xs text-slate-500 text-center">
+              Total Tugas Aktif: <strong class="${countColor}">${activeCount} Task</strong>
+            </div>
+          </div>
+        `;
+        grid.innerHTML += card;
+      });
+
+      if (matchedCards === 0) {
+        grid.innerHTML = `<p class="text-slate-400 col-span-full text-center py-10 italic">Tidak ada tugas atau anggota yang sesuai dengan pencarian "<strong>${searchQuery}</strong>"</p>`;
+      }
+
+      document.getElementById('stat-total').innerText = globalMembers.length + ' Orang';
+      document.getElementById('stat-low').innerText = lowCount + ' Orang';
+      document.getElementById('stat-medium').innerText = medCount + ' Orang';
+      document.getElementById('stat-high').innerText = highCount + ' Orang';
+
+      const totalTasksCount = globalTasks.length;
+      const doneTasksCount = globalTasks.filter(t => t.status === 'Done').length;
+      const completionRate = totalTasksCount > 0 ? Math.round((doneTasksCount / totalTasksCount) * 100) : 0;
+
+      document.getElementById('stat-total-tasks').innerText = totalTasksCount + ' Task';
+      document.getElementById('stat-done-tasks').innerText = doneTasksCount + ' Task';
+      document.getElementById('stat-completion-rate').innerText = completionRate + '%';
+    }
+
+    function populateMemberDropdown() {
+      const selectModal = document.getElementById('task-member-select');
+      if (selectModal) {
+        selectModal.innerHTML = globalMembers.map(m => `<option value="${m.id}">${m.name} (${m.role || 'Member'})</option>`).join('');
+      }
+
+      const selectReport = document.getElementById('report-member-select');
+      if (selectReport) {
+        selectReport.innerHTML = `<option value="all">-- Semua Anggota (Ringkasan Tim) --</option>` + 
+          globalMembers.map(m => `<option value="${m.id}">${m.name} - ${m.role || 'Member'}</option>`).join('');
+      }
+    }
+
+    // Modal Add / Edit Task
+    function openModal() {
+      const modal = document.getElementById('task-modal');
+      if (modal) modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      // 1. Kosongkan ID tugas agar sistem tahu ini adalah penambahan baru (bukan edit)
+      const taskIdInput = document.getElementById('task-id');
+      if (taskIdInput) taskIdInput.value = '';
+
+      // 2. Kembalikan judul modal menjadi "Tambah Tugas Baru"
+      const modalTitle = document.getElementById('modal-task-title');
+      if (modalTitle) modalTitle.innerText = 'Tambah Tugas Baru';
+
+      // 3. Reset form agar bersih dari input sebelumnya
+      const taskForm = document.getElementById('task-form');
+      if (taskForm) taskForm.reset();
+
+      if (typeof clearPastedImage === 'function') {
+        clearPastedImage();
+      }
+
+      const memberSelect = document.getElementById('task-member-select');
+      if (currentUser && memberSelect) {
+        if (currentUser.role && currentUser.role.toLowerCase() === 'admin') {
+          memberSelect.innerHTML = `<option value="${currentUser.id}">${currentUser.name} (Saya)</option>`;
+          memberSelect.disabled = true;
+        } else {
+          populateMemberDropdown();
+          memberSelect.disabled = false;
+          memberSelect.value = currentUser.id;
+        }
+      }
+    }
+
+
+    function openEditModal(taskId) {
+      const task = globalTasks.find(t => t.id == taskId);
+      if (!task) return;
+
+      const taskIdInput = document.getElementById('task-id');
+      if (taskIdInput) taskIdInput.value = task.id;
+
+      const modalTitle = document.getElementById('modal-task-title');
+      if (modalTitle) modalTitle.innerText = 'Edit Tugas';
+
+      // Set dropdown member sesuai pemilik tugas, lalu disable agar tidak bisa diubah dari sini
+      const taskMember = document.getElementById('task-member-select');
+      if (taskMember) {
+        taskMember.value = task.member_id;
+        taskMember.disabled = true; // Dikunci agar sesuai aturan bisnis (ubah lewat menu Alihkan)
+      }
+
+      const taskTitle = document.getElementById('task-title');
+      if (taskTitle) taskTitle.value = task.title;
+
+      const taskCabang = document.getElementById('task-cabang');
+      if (taskCabang) taskCabang.value = task.cabang || '';
+
+      const taskTanggal = document.getElementById('task-tanggal-pengajuan');
+      if (taskTanggal) taskTanggal.value = task.tanggal_pengajuan || '';
+
+      const taskDue = document.getElementById('task-due');
+      if (taskDue) taskDue.value = task.due_date || '';
+
+      const taskPriority = document.getElementById('task-priority');
+      if (taskPriority) taskPriority.value = task.priority || 'Low';
+
+      const taskAttachment = document.getElementById('task-attachment-url');
+      if (taskAttachment) taskAttachment.value = task.attachment_url || '';
+
+      if (typeof clearPastedImage === 'function') {
+        clearPastedImage();
+      }
+
+      const taskModal = document.getElementById('task-modal');
+      if (taskModal) {
+        taskModal.classList.remove('hidden'); 
+        taskModal.classList.add('flex'); 
+      }
+    }
+
+    function closeModal() { 
+      clearPastedImage();
+      document.getElementById('task-modal').classList.add('hidden'); 
+      document.getElementById('task-modal').classList.remove('flex'); 
+    }
+
+    // Modal Catatan Overdue
+    function openNoteModal(taskId) {
+      const task = globalTasks.find(t => t.id == taskId);
+      const currentNote = task ? (task.notes || '') : '';
+      
+      document.getElementById('note-task-id').value = taskId;
+      document.getElementById('note-input').value = currentNote;
+      document.getElementById('note-modal').classList.remove('hidden');
+      document.getElementById('note-modal').classList.add('flex');
+    }
+
+    function closeNoteModal() {
+      document.getElementById('note-modal').classList.add('hidden');
+      document.getElementById('note-modal').classList.remove('flex');
+    }
+
+    async function saveTaskNote() {
+      const taskId = document.getElementById('note-task-id').value;
+      const noteText = document.getElementById('note-input').value;
+
+      const { error } = await supabaseClient.from('tasks').update({ notes: noteText }).eq('id', taskId);
+      if (error) alert('Gagal menyimpan catatan!');
+      else closeNoteModal();
+    }
+
+    // Modal Rekap
+    function openReportModal() {
+      document.getElementById('report-member-select').value = 'all';
+      document.getElementById('filter-start-date').value = '';
+      document.getElementById('filter-end-date').value = '';
+      renderPersonalReport();
+      document.getElementById('report-modal').classList.remove('hidden');
+      document.getElementById('report-modal').classList.add('flex');
+    }
+
+    function closeReportModal() {
+      document.getElementById('report-modal').classList.add('hidden');
+      document.getElementById('report-modal').classList.remove('flex');
+    }
+
+    function getFilteredTasks() {
+      const startDate = document.getElementById('filter-start-date').value;
+      const endDate = document.getElementById('filter-end-date').value;
+
+      return globalTasks.filter(t => {
+        if (!t.due_date) return true;
+        if (startDate && t.due_date < startDate) return false;
+        if (endDate && t.due_date > endDate) return false;
+        return true;
+      });
+    }
+
+    let myReportChart = null; // Variabel simpan instance Chart.js
+
+    function renderPersonalReport() {
+      const selectedMemberId = document.getElementById('report-member-select').value;
+      const selectedStatus = document.getElementById('report-status-select') ? document.getElementById('report-status-select').value : 'all';
+      const startDate = document.getElementById('filter-start-date').value;
+      const endDate = document.getElementById('filter-end-date').value;
+      
+      // Ambil nilai dari input pencarian rekap baru
+      const searchBoxInput = document.getElementById('report-search-input');
+      const reportSearchQuery = searchBoxInput ? searchBoxInput.value.toLowerCase().trim() : '';
+
+      const contentContainer = document.getElementById('report-content');
+      
+      if (!contentContainer) return;
+
+      // 1. Filter data tugas berdasarkan anggota, rentang tanggal, dan kata kunci pencarian
+      let filteredTasks = globalTasks.filter(t => {
+        // Filter Anggota
+        if (selectedMemberId !== 'all' && t.member_id != selectedMemberId) {
+          return false;
+        }
+        // === TAMBAHAN FILTER STATUS ===
+        if (selectedStatus !== 'all') {
+          if (selectedStatus === 'Done' && t.status !== 'Done') return false;
+          if (selectedStatus === 'In Progress' && (t.status === 'Done' || t.transfer_status === 'pending_approval')) return false;
+          if (selectedStatus === 'pending_approval' && t.transfer_status !== 'pending_approval') return false;
+          if (selectedStatus === 'rejected' && t.transfer_status !== 'rejected') return false;
+        }
+        // Filter Rentang Tanggal
+        const taskDate = t.created_at ? t.created_at.split('T')[0] : '';
+        if (startDate && taskDate < startDate) return false;
+        if (endDate && taskDate > endDate) return false;
+
+        // Filter Pencarian (Mencari berdasarkan Judul, Cabang, atau Nama PIC)
+        if (reportSearchQuery) {
+          const member = globalMembers.find(m => m.id == t.member_id);
+          const memberName = member ? member.name.toLowerCase() : '';
+          const title = t.title ? t.title.toLowerCase() : '';
+          const cabang = t.cabang ? t.cabang.toLowerCase() : '';
+
+          const isMatch = title.includes(reportSearchQuery) || 
+                          cabang.includes(reportSearchQuery) || 
+                          memberName.includes(reportSearchQuery);
+          if (!isMatch) return false;
+        }
+
+        return true;
+      });
+
+      // Sisa kode render tabel selanjutnya tetap sama seperti sebelumnya...
+
+      // 2. Hitung statistik ringkasan di atas tabel
+      const totalTasks = filteredTasks.length;
+      const doneTasks = filteredTasks.filter(t => t.status === 'Done').length;
+      const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+      // Perbarui angka di kotak ringkasan
+      document.getElementById('report-total-tasks').innerText = totalTasks;
+      document.getElementById('report-done-tasks').innerText = doneTasks;
+      document.getElementById('report-rate').innerText = completionRate + '%';
+      
+      if (selectedMemberId === 'all') {
+        document.getElementById('report-label-total').innerText = 'Total Tugas Tim';
+      } else {
+        const memberObj = globalMembers.find(m => m.id == selectedMemberId);
+        document.getElementById('report-label-total').innerText = `Total Tugas (${memberObj ? memberObj.name : 'Staff'})`;
+      }
+
+      // 3. Jika data kosong
+      if (filteredTasks.length === 0) {
+        contentContainer.innerHTML = `
+          <div class="text-center py-12 text-slate-400 text-xs border border-dashed rounded-xl my-2">
+            Tidak ada data tugas pada rentang tanggal atau filter tersebut.
+          </div>
+        `;
+        return;
+      }
+
+      // 4. Render ke dalam bentuk TABEL RAPI (Tanpa Grafik)
+      let tableHTML = `
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="text-slate-600 text-[11px] font-bold border-b border-slate-200">
+              <th class="py-3 px-4 text-left">NO.</th>
+              <th class="py-3 px-4 text-center w-10">
+                <input type="checkbox" id="select-all-checkbox" onclick="toggleSelectAllTasks(this)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+              </th>
+              <th class="py-3 px-4 text-left cursor-pointer hover:text-indigo-600 transition" onclick="sortTable('tanggal_pengajuan')">
+                TGL PENGAJUAN <i class="fa-solid fa-sort text-[10px] text-slate-400 ml-1"></i>
+              </th>
+              <th class="py-3 px-4 text-left cursor-pointer hover:text-indigo-600 transition" onclick="sortTable('cabang')">
+                CABANG <i class="fa-solid fa-sort text-[10px] text-slate-400 ml-1"></i>
+              </th>
+              <th class="py-3 px-4 text-left cursor-pointer hover:text-indigo-600 transition" onclick="sortTable('assignee_name')">
+                PIC / ANGGOTA <i class="fa-solid fa-sort text-[10px] text-slate-400 ml-1"></i>
+              </th>
+              <th class="py-3 px-4 text-left cursor-pointer hover:text-indigo-600 transition" onclick="sortTable('title')">
+                JUDUL TUGAS (KET) <i class="fa-solid fa-sort text-[10px] text-slate-400 ml-1"></i>
+              </th>
+              <th class="py-3 px-4 text-left cursor-pointer hover:text-indigo-600 transition" onclick="sortTable('priority')">
+                PRIORITAS <i class="fa-solid fa-sort text-[10px] text-slate-400 ml-1"></i>
+              </th>
+              <th class="py-3 px-4 text-left cursor-pointer hover:text-indigo-600 transition" onclick="sortTable('status')">
+                STATUS PENGERJAAN <i class="fa-solid fa-sort text-[10px] text-slate-400 ml-1"></i>
+              </th>
+              <th class="py-3 px-4 text-left cursor-pointer hover:text-indigo-600 transition" onclick="sortTable('due_date')">
+                DEADLINE <i class="fa-solid fa-sort text-[10px] text-slate-400 ml-1"></i>
+              </th>
+              <!-- TAMBAHAN KOLOM TGL SELESAI -->
+              <th class="py-3 px-4 text-left cursor-pointer hover:text-indigo-600 transition" onclick="sortTable('completed_date')">
+                TGL SELESAI <i class="fa-solid fa-sort text-[10px] text-slate-400 ml-1"></i>
+              </th>
+              <th class="py-3 px-4 text-left">CATATAN</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 text-slate-600">
+      `;
+
+      filteredTasks.forEach((t, index) => {
+        // Cari nama anggota berdasarkan member_id
+        const member = globalMembers.find(m => m.id == t.member_id);
+        const memberName = member ? member.name : 'Tidak Diketahui';
+
+        // Format badge status
+        let statusBadge = '';
+        if (t.status === 'Done') {
+          statusBadge = `<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-semibold rounded-full text-[10px]">Selesai</span>`;
+        } else if (t.transfer_status === 'pending_approval') {
+          statusBadge = `<span class="px-2 py-0.5 bg-amber-100 text-amber-700 font-semibold rounded-full text-[10px]">Menunggu Approval</span>`;
+        } else if (t.transfer_status === 'rejected') {
+          statusBadge = `<span class="px-2 py-0.5 bg-rose-100 text-rose-700 font-semibold rounded-full text-[10px]">Revisi / Ditolak</span>`;
+        } else {
+          statusBadge = `<span class="px-2 py-0.5 bg-blue-100 text-blue-700 font-semibold rounded-full text-[10px]">On Progress</span>`;
+        }
+
+        // Tanggal format ringkas
+        const tanggalBuat = t.created_at ? t.created_at.split('T')[0] : '-';
+
+        tableHTML += `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-2.5 text-center font-medium text-slate-400">${index + 1}</td>
+            <td class="p-2.5 text-center">
+              <input type="checkbox" class="task-row-checkbox rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" value="${t.id}">
+            </td>
+            <td class="p-2.5 whitespace-nowrap">${t.tanggal_pengajuan || '-'}</td>
+            <td class="p-2.5 font-semibold text-indigo-600">${t.cabang || '-'}</td>
+            <td class="p-2.5 font-medium text-slate-800">${memberName}</td>
+            <td class="p-2.5 font-medium text-slate-900">${t.title}</td>
+            <td class="p-2.5">${t.priority || 'Low'}</td>
+            <td class="p-2.5 whitespace-nowrap">${statusBadge}</td>
+            <td class="p-2.5 whitespace-nowrap">${t.due_date || '-'}</td>
+            <!-- TAMBAHAN MENAMPILKAN TANGGAL SELESAI ATAU TANDA BELUM SELESAI -->
+            <td class="p-2.5 whitespace-nowrap font-medium ${t.completed_date ? 'text-emerald-600' : 'text-slate-400'}">
+              ${t.completed_date || '-'}
+            </td>
+            <td class="p-2.5 italic text-slate-500">${t.transfer_note || t.notes || '-'}</td>
+          </tr>
+        `;
+      });
+
+      tableHTML += `
+          </tbody>
+        </table>
+      `;
+
+      contentContainer.innerHTML = tableHTML;
+    }
+
+    // Variabel penyimpan state arah sort
+    let currentSortColumn = '';
+    let isAscending = true;
+
+    function sortTable(column) {
+      // Jika kolom yang sama diklik dua kali, balik arah urutannya (Ascending <-> Descending)
+      if (currentSortColumn === column) {
+        isAscending = !isAscending;
+      } else {
+        currentSortColumn = column;
+        isAscending = true;
+      }
+
+      // Lakukan pengurutan pada array data tabel rekap Anda (misal: globalTasks atau filteredTasks)
+      globalTasks.sort((a, b) => {
+        let valA = a[column] || '';
+        let valB = b[column] || '';
+
+        // Penanganan khusus untuk format prioritas agar urutannya logis (High -> Medium -> Low)
+        if (column === 'priority') {
+          const priorityOrder = { 'High': 1, 'Medium': 2, 'Low': 3 };
+          valA = priorityOrder[valA] || 4;
+          valB = priorityOrder[priorityOrder] || 4;
+        }
+
+        if (valA < valB) return isAscending ? -1 : 1;
+        if (valA > valB) return isAscending ? 1 : -1;
+        return 0;
+      });
+
+      // Render ulang tabel setelah diurutkan
+      renderPersonalReport(); // Sesuaikan dengan fungsi render tabel rekap Anda
+    }
+
+    function exportToExcel() {
+      const filteredByDate = getFilteredTasks();
+      const memberId = document.getElementById('report-member-select').value;
+
+      let exportData = [];
+
+      if (memberId === 'all') {
+        globalMembers.forEach(m => {
+          const mTasks = filteredByDate.filter(t => t.member_id === m.id);
+          mTasks.forEach(t => {
+            // Di dalam perulangan exportData.push:
+            exportData.push({
+              'Nama Anggota': m.name,
+              'Role': m.role,
+              'Judul Tugas': t.title,
+              'Deadline': t.due_date || '-',
+              'Tanggal Selesai': t.completed_date || '-', // <-- Tambahan di excel
+              'Status': getTaskStatus(t).label,
+              'Prioritas': t.priority || 'Low',
+              'Catatan Overdue': t.notes || '-'
+            });
+          });
+        });
+      } else {
+        const m = globalMembers.find(mem => mem.id == memberId);
+        const mTasks = filteredByDate.filter(t => t.member_id == memberId);
+        mTasks.forEach(t => {
+          // Di dalam perulangan exportData.push:
+          exportData.push({
+            'Nama Anggota': m.name,
+            'Role': m.role,
+            'Judul Tugas': t.title,
+            'Deadline': t.due_date || '-',
+            'Tanggal Selesai': t.completed_date || '-', // <-- Tambahan di excel
+            'Status': getTaskStatus(t).label,
+            'Prioritas': t.priority || 'Low',
+            'Catatan Overdue': t.notes || '-'
+          });
+        });
+      }
+
+      if (exportData.length === 0) {
+        alert('Tidak ada data untuk di-export!');
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Performa");
+      XLSX.writeFile(workbook, `Rekap_Workload_Tim_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    function downloadExcelTemplate() {
+      // Buat contoh baris data atau header kosong untuk template
+      const templateData = [
+        {
+          "Tgl Pengajuan": "2026-03-01",
+          "Cabang": "CIBADAK 1",
+          "PIC / Anggota": "ANNA HERLUINA",
+          "Judul Tugas (Ket)": "Contoh: Desain Banner Promo Maret",
+          "Prioritas": "High",
+          "Deadline": "2026-03-05",
+          "Catatan": "Contoh catatan atau keterangan"
+        }
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Format Template");
+      
+      // Download file dengan nama 'Template_Import_Tugas.xlsx'
+      XLSX.writeFile(workbook, "Template_Import_Tugas.xlsx");
+    }
+
+    // Membuka modal dialog import
+    function openImportDialogModal() {
+      const modal = document.getElementById('import-dialog-modal');
+      const fileInput = document.getElementById('modal-excel-file-input');
+      if (fileInput) fileInput.value = ''; // Reset input file
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    // Menutup modal dialog import
+    function closeImportDialogModal() {
+      const modal = document.getElementById('import-dialog-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+  // Menjalankan proses import dari file yang di-upload melalui modal
+  function submitModalExcelImport() {
+    const fileInput = document.getElementById('modal-excel-file-input');
+    if (!fileInput || fileInput.files.length === 0) {
+      alert("Silakan pilih file Excel terlebih dahulu!");
+      return;
+    }
+
+    // Panggil fungsi handleExcelImport yang sudah ada dengan mensimulasikan event
+    const fakeEvent = {
+      target: fileInput
+    };
+    
+    handleExcelImport(fakeEvent);
+    closeImportDialogModal();
+  }
+
+  // Fungsi centang / pilih semua tugas di tabel rekap
+    function toggleSelectAllTasks(source) {
+      const checkboxes = document.querySelectorAll('.task-row-checkbox');
+      checkboxes.forEach(cb => cb.checked = source.checked);
+    }
+
+    // Fungsi Arsip Terpilih dengan Indikator Real-time
+    async function archiveSelectedTasks() {
+      const selectedCheckboxes = document.querySelectorAll('.task-row-checkbox:checked');
+      if (selectedCheckboxes.length === 0) {
+        alert('Silakan centang minimal satu tugas yang ingin di-arsip!');
+        return;
+      }
+
+      const selectedIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+      if (!confirm(`Apakah Anda yakin ingin meng-arsip ${selectedIds.length} tugas terpilih?\n\n- Data akan diunduh dalam bentuk file .ZIP\n- Data tugas akan otomatis terhapus dari sistem.`)) {
+        return;
+      }
+
+      // 1. Tampilkan Modal Loading
+      const loadingModal = document.getElementById('archive-loading-modal');
+      const statusText = document.getElementById('archive-loading-status');
+      if (loadingModal) {
+        loadingModal.classList.remove('hidden');
+        loadingModal.classList.add('flex');
+      }
+
+      try {
+        const zip = new JSZip();
+        const folderLampiran = zip.folder("lampiran_arsip");
+        let archiveDataRows = [];
+
+        // Kumpulkan total file yang harus diunduh
+        let totalFilesToDownload = 0;
+        let downloadedCount = 0;
+
+        const tasksToArchive = selectedIds.map(id => globalTasks.find(t => t.id == id)).filter(Boolean);
+
+        tasksToArchive.forEach(task => {
+          if (task.attachment_url) {
+            let urls = task.attachment_url.includes(',') ? task.attachment_url.split(',') : [task.attachment_url];
+            totalFilesToDownload += urls.length;
+          }
+        });
+
+        if (statusText) statusText.innerText = `Memproses ${tasksToArchive.length} tugas...`;
+
+        // 2. Loop tugas yang dipilih
+        for (let i = 0; i < tasksToArchive.length; i++) {
+          const task = tasksToArchive[i];
+          const member = globalMembers.find(m => m.id == task.member_id);
+          const memberName = member ? member.name : 'Tidak Diketahui';
+
+          archiveDataRows.push({
+            'ID Tugas': task.id,
+            'Tgl Pengajuan': task.tanggal_pengajuan || '-',
+            'Cabang': task.cabang || '-',
+            'PIC / Anggota': memberName,
+            'Judul Tugas': task.title,
+            'Prioritas': task.priority || 'Low',
+            'Status': task.status,
+            'Deadline': task.due_date || '-',
+            'Tanggal Selesai': task.completed_date || '-',
+            'Catatan': task.notes || task.transfer_note || '-'
+          });
+
+          // Unduh lampiran real-time
+          if (task.attachment_url) {
+            let urls = task.attachment_url.includes(',') ? task.attachment_url.split(',') : [task.attachment_url];
+            
+            for (let j = 0; j < urls.length; j++) {
+              let fileUrl = urls[j].trim();
+              downloadedCount++;
+              
+              if (statusText) {
+                statusText.innerText = `Mengunduh lampiran (${downloadedCount}/${totalFilesToDownload})...`;
+              }
+
+              try {
+                let fileName = fileUrl.split('/').pop().split('?')[0] || `lampiran_${task.id}_${j+1}.png`;
+                fileName = `tugas_${task.id}_${fileName}`;
+
+                const response = await fetch(fileUrl);
+                const blob = await response.blob();
+                folderLampiran.file(fileName, blob);
+              } catch (fetchErr) {
+                console.warn(`Gagal mengunduh lampiran tugas ID ${task.id}:`, fetchErr);
+              }
+            }
+          }
+        }
+
+        if (statusText) statusText.innerText = "Membuat file Excel dan arsip ZIP...";
+
+        // Buat file Excel ringkasan
+        const worksheet = XLSX.utils.json_to_sheet(archiveDataRows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Arsip Tugas");
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        zip.file(`Rekap_Arsip_Tugas_${new Date().toISOString().slice(0,10)}.xlsx`, excelBuffer);
+
+        if (statusText) statusText.innerText = "Mengunduh file .ZIP ke komputer...";
+
+        // Generate dan unduh ZIP
+        const content = await zip.generateAsync({ type: "blob" });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = `Arsip_Workload_${new Date().toISOString().slice(0,10)}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        if (statusText) statusText.innerText = "Menghapus data dari database...";
+
+        // 1. Hapus data dari Supabase
+        const { error: deleteError } = await supabaseClient
+          .from('tasks')
+          .delete()
+          .in('id', selectedIds);
+
+        // 2. SEGERA SEMBUNYIKAN MODAL LOADING DI SINI AGAR TIDAK NYANGKUT
+        if (loadingModal) {
+          loadingModal.classList.add('hidden');
+          loadingModal.classList.remove('flex');
+        }
+
+        // 3. Tampilkan pesan dan muat ulang data
+        if (deleteError) {
+          alert('Arsip berhasil diunduh, tetapi gagal menghapus data dari database: ' + deleteError.message);
+        } else {
+          alert('Arsip berhasil diunduh dan data tugas terpilih telah dibersihkan dari sistem!');
+          fetchDashboardData();
+        }
+
+      } catch (err) {
+        // Pastikan modal tertutup juga jika terjadi error di tengah jalan
+        if (loadingModal) {
+          loadingModal.classList.add('hidden');
+          loadingModal.classList.remove('flex');
+        }
+        console.error("Gagal melakukan arsip:", err);
+        alert("Terjadi kesalahan saat memproses arsip: " + err.message);
+      }
+    }
+
+
+    // --- HANDLE SIMPAN TUGAS + PASTE UPLOAD ---
+    async function handleSaveTask(event) {
+      event.preventDefault();
+      
+      const taskId = document.getElementById('task-id').value;
+      const selectedMemberId = document.getElementById('task-member-select').value;
+      const titleInput = document.getElementById('task-title').value;
+      const tanggalPengajuanInput = document.getElementById('task-tanggal-pengajuan').value;
+      const cabangInput = document.getElementById('task-cabang').value;
+      const dueDateInput = document.getElementById('task-due').value;
+      const priorityInput = document.getElementById('task-priority').value;
+      
+      let manualUrl = document.getElementById('task-attachment-url').value.trim();
+
+      const isDelegatingToOthers = (selectedMemberId != currentUser.id);
+
+      if (!isDelegatingToOthers && (!dueDateInput || dueDateInput.trim() === "")) {
+        alert("Karena ini tugas untuk diri sendiri, mohon isi tenggat waktu (deadline)!");
+        return; 
+      }
+
+      let initialTransferStatus = 'none';
+      let initialStatus = 'In Progress';
+      let targetTransferredTo = null;
+
+      if (isDelegatingToOthers) {
+        initialTransferStatus = 'pending_approval'; 
+        targetTransferredTo = selectedMemberId; 
+      }
+
+      // --- PROSES MULTI-ATTACHMENT UPLOAD ---
+      // --- PROSES MULTI-ATTACHMENT (SIMPAN SEBAGAI TEKS BERKOMAK) ---
+      let allAttachmentUrls = [];
+
+      if (manualUrl) {
+        allAttachmentUrls.push(manualUrl);
+      }
+
+      const fileInput = document.getElementById('task-attachment-file');
+      let filesToUpload = [];
+
+      // Prioritaskan mengambil dari array pastedFiles jika ada
+      if (pastedFiles && pastedFiles.length > 0) {
+        filesToUpload = [...pastedFiles];
+      } else if (fileInput && fileInput.files.length > 0) {
+        // Jika murni memilih file manual lewat tombol upload
+        for (let i = 0; i < fileInput.files.length; i++) {
+          filesToUpload.push(fileInput.files[i]);
+        }
+      }
+
+      // Masukkan file yang di-upload melalui tombol pilih file
+      if (fileInput && fileInput.files.length > 0) {
+        for (let i = 0; i < fileInput.files.length; i++) {
+          // Hindari duplikat jika file yang sama terhitung dua kali
+          filesToUpload.push(fileInput.files[i]);
+        }
+      }
+
+      if (filesToUpload.length > 0) {
+        for (let file of filesToUpload) {
+          const fileNameClean = file.name ? file.name.replace(/[^a-zA-Z0-9.-]/g, '_') : `screenshot_${Date.now()}.png`;
+          const filePath = `uploads/${Date.now()}_${fileNameClean}`;
+
+          const { data: uploadData, error: uploadError } = await supabaseClient.storage
+            .from('task-files')
+            .upload(filePath, file);
+
+          if (uploadError) {
+            alert('Gagal mengunggah salah satu file: ' + uploadError.message);
+            return;
+          }
+
+          const { data: publicUrlData } = supabaseClient.storage
+            .from('task-files')
+            .getPublicUrl(filePath);
+
+          if (publicUrlData && publicUrlData.publicUrl) {
+            allAttachmentUrls.push(publicUrlData.publicUrl);
+          }
+        }
+      }
+
+      let payload = {
+        member_id: currentUser.id,
+        title: titleInput,
+        tanggal_pengajuan: tanggalPengajuanInput || null,
+        cabang: cabangInput || null,
+        priority: priorityInput || 'Low',
+        transfer_status: initialTransferStatus,
+        transferred_to: targetTransferredTo,
+        status: initialStatus,
+        // Ubah array menjadi string teks yang dipisahkan koma agar aman di kolom text biasa
+        attachment_url: allAttachmentUrls.length > 0 ? allAttachmentUrls.join(',') : null 
+      };
+
+      if (dueDateInput && dueDateInput.trim() !== "") {
+        payload.due_date = dueDateInput;
+      } else {
+        payload.due_date = null;
+      }
+
+      if (taskId) {
+        const { error } = await supabaseClient.from('tasks').update(payload).eq('id', taskId);
+        if (error) {
+          alert('Gagal memperbarui tugas: ' + error.message);
+        } else {
+          alert('Tugas berhasil diperbarui!');
+          closeModal();
+          fetchDashboardData();
+        }
+      } else {
+        const { error } = await supabaseClient.from('tasks').insert([payload]);
+        if (error) {
+          alert('Gagal menambah tugas: ' + error.message);
+        } else {
+          alert('Tugas baru berhasil ditambahkan!');
+          closeModal();
+          fetchDashboardData();
+        }
+      }
+
+      clearAllPastedImages();
+    }
+
+    async function completeTask(taskId) {
+      if (confirm('Apakah Anda yakin tugas ini sudah selesai?')) {
+        // Dapatkan tanggal hari ini dengan format YYYY-MM-DD (mengikuti zona waktu lokal)
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const formattedDate = `${year}-${month}-${day}`;
+
+        // Kirim status 'Done' sekaligus tanggal selesainya ke database Supabase
+        const { error } = await supabaseClient
+          .from('tasks')
+          .update({ 
+            status: 'Done',
+            completed_date: formattedDate // <-- Menyimpan tanggal selesai otomatis
+          })
+          .eq('id', taskId);
+
+        if (error) {
+          alert('Gagal memperbarui tugas: ' + error.message);
+        } else {
+          // Data akan otomatis tersinkronisasi lewat realtime atau fetchDashboardData()
+        }
+      }
+    }
+
+    async function deleteTask(taskId) {
+      if (confirm('Apakah Anda yakin ingin menghapus tugas ini?')) {
+        const { error } = await supabaseClient.from('tasks').delete().eq('id', taskId);
+        if (error) alert('Gagal menghapus tugas!');
+      }
+    }
+
+    // Inisialisasi awal
+    fetchDashboardData();
+
+    // Listener Realtime Supabase
+    supabaseClient
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        fetchDashboardData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => {
+        fetchDashboardData();
+      })
+      .subscribe();
+
+    // Helper untuk menghitung sisa hari / countdown deadline
+    function getDeadlineBadge(deadlineDate, status) {
+      if (status === 'Selesai') {
+        return `<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Selesai</span>`;
+      }
+      
+      // Jika deadline belum diisi atau kosong
+      if (!deadlineDate || deadlineDate.trim() === '') {
+        return `<span class="px-2 py-0.5 text-[10px] font-bold bg-amber-500 text-white rounded-md animate-pulse">SEGERA ISI DEADLINE</span>`;
+      }
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const deadline = new Date(deadlineDate);
+      deadline.setHours(0, 0, 0, 0);
+      
+      const diffTime = deadline - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) {
+        return `<span class="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">Terlambat (${Math.abs(diffDays)} hari)</span>`;
+      } else if (diffDays === 0) {
+        return `<span class="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">Hari Ini</span>`;
+      } else {
+        return `<span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">${diffDays} hari lagi</span>`;
+      }
+    }
+
+    
+  // 2. Fungsi utama modal indikator
+  function showStatusMembers(type) {
+    const modal = document.getElementById('status-detail-modal');
+    const modalTitle = document.getElementById('status-modal-title');
+    const modalBadge = document.getElementById('status-modal-badge');
+    const listContainer = document.getElementById('status-modal-list');
+
+    if (!modal || !listContainer) return;
+
+    if (['low', 'medium', 'high'].includes(type)) {
+      const filteredMembers = globalMembers.filter(member => {
+        const activeTasks = globalTasks.filter(t => t.member_id === member.id && t.status !== 'Done').length;
+        if (type === 'low') return activeTasks <= 2;
+        if (type === 'medium') return activeTasks >= 3 && activeTasks <= 4;
+        if (type === 'high') return activeTasks >= 5;
+        return false;
+      });
+
+      if (type === 'low') {
+        modalTitle.innerText = `Anggota Aman / Low Load (${filteredMembers.length})`;
+        modalBadge.className = "w-3 h-3 rounded-full bg-emerald-500";
+      } else if (type === 'medium') {
+        modalTitle.innerText = `Anggota Ideal / Medium Load (${filteredMembers.length})`;
+        modalBadge.className = "w-3 h-3 rounded-full bg-amber-500";
+      } else if (type === 'high') {
+        modalTitle.innerText = `Anggota Overload / High Load (${filteredMembers.length})`;
+        modalBadge.className = "w-3 h-3 rounded-full bg-rose-500";
+      }
+
+      if (filteredMembers.length === 0) {
+        listContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Tidak ada anggota dengan status ini.</p>`;
+      } else {
+        listContainer.innerHTML = filteredMembers.map(member => {
+          const activeTasksCount = globalTasks.filter(t => t.member_id === member.id && t.status !== 'Done').length;
+          return `
+            <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
+                  ${member.name.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p class="text-xs font-bold text-slate-800">${member.name}</p>
+                  <p class="text-[10px] text-slate-500">${member.role || 'Staff'}</p>
+                </div>
+              </div>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600">
+                ${activeTasksCount} Task
+              </span>
+            </div>
+          `;
+        }).join('');
+      }
+    } else if (type === 'total-tasks' || type === 'done-tasks') {
+      const isDone = type === 'done-tasks';
+      // KODE BARU (Filter + Sort berdasarkan Sisa Hari & Prioritas)
+      const filteredTasks = globalTasks
+        .filter(t => isDone ? t.status === 'Done' : t.status !== 'Done')
+        .sort((a, b) => {
+          // 1. Ambil nilai sisa hari (daysLeft / sisa_hari / diff tanggal)
+          const getDays = (task) => {
+            if (task.daysLeft !== undefined) return task.daysLeft;
+            if (task.sisa_hari !== undefined) return task.sisa_hari;
+            if (typeof task.deadline === 'string' && task.deadline.includes('Hr')) {
+              return parseInt(task.deadline) || 0;
+            }
+            const target = new Date(task.deadline_date || task.deadline || task.dueDate || task.due_date);
+            if (!isNaN(target)) {
+              const today = new Date();
+              today.setHours(0,0,0,0);
+              target.setHours(0,0,0,0);
+              return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+            }
+            return 999; // Jika tidak ada deadline, ditaruh paling bawah
+          };
+
+          const daysA = getDays(a);
+          const daysB = getDays(b);
+
+          // Jika sisa harinya berbeda, utamakan sisa hari terkecil (meppet/terlewat)
+          if (daysA !== daysB) {
+            return daysA - daysB;
+          }
+
+          // 2. Jika sisa hari sama, utamakan prioritas High > Medium > Low
+          const priorityWeight = { 'High': 3, 'Medium': 2, 'Med': 2, 'Low': 1 };
+          const weightA = priorityWeight[a.priority] || 0;
+          const weightB = priorityWeight[b.priority] || 0;
+          return weightB - weightA;
+        });
+
+      if (isDone) {
+        modalTitle.innerText = `Daftar Tugas Selesai (${filteredTasks.length})`;
+        modalBadge.className = "w-3 h-3 rounded-full bg-emerald-500";
+      } else {
+        modalTitle.innerText = `Daftar Total Tugas Tim Aktif (${filteredTasks.length})`;
+        modalBadge.className = "w-3 h-3 rounded-full bg-indigo-500";
+      }
+
+      if (filteredTasks.length === 0) {
+        listContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Tidak ada tugas ditemukan.</p>`;
+      } else {
+        listContainer.innerHTML = filteredTasks.map(task => {
+          const assignedMember = globalMembers.find(m => m.id === task.member_id);
+          const memberName = assignedMember ? assignedMember.name : 'Unassigned';
+          
+          // Ambil sisa hari langsung dari properti task yang ada
+          let deadlineText = '';
+          if (!isDone) {
+            if (task.daysLeft !== undefined) {
+              deadlineText = task.daysLeft <= 0 ? 'Hari Ini!' : `${task.daysLeft} Hr Lagi`;
+            } else if (task.sisa_hari !== undefined) {
+              deadlineText = task.sisa_hari <= 0 ? 'Hari Ini!' : `${task.sisa_hari} Hr Lagi`;
+            } else if (typeof task.deadline === 'string' && task.deadline.includes('Hr')) {
+              deadlineText = task.deadline;
+            } else {
+              // Jika berbentuk tanggal biasa
+              const target = new Date(task.deadline_date || task.deadline || task.dueDate || task.due_date);
+              if (!isNaN(target)) {
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                target.setHours(0,0,0,0);
+                const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                deadlineText = diff < 0 ? `Terlewat ${Math.abs(diff)} Hr` : diff === 0 ? 'Hari Ini!' : `${diff} Hr Lagi`;
+              }
+            }
+          }
+
+          // KODE BARU (Badge Warna Merah + Efek khusus 'Hari Ini!')
+          let deadlineBadge = '';
+          if (deadlineText) {
+            const isToday = deadlineText.includes('Hari Ini');
+            
+            if (isToday) {
+              // Badge Merah Solid + Berkedip untuk Hari Ini
+              deadlineBadge = `<span class="px-2 py-0.5 text-[10px] font-bold bg-rose-600 text-white rounded-md animate-pulse shadow-xs">${deadlineText}</span>`;
+            } else {
+              // Badge Soft Merah (Background Merah Muda + Teks Merah)
+              deadlineBadge = `<span class="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-600 border border-rose-200 rounded-md">${deadlineText}</span>`;
+            }
+          }
+
+          return `
+            <div class="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded ${isDone ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}">
+                    ${task.priority || 'Normal'}
+                  </span>
+                  ${deadlineBadge}
+                </div>
+                <span class="text-[10px] font-medium text-slate-500 truncate max-w-[120px]">👤 ${memberName}</span>
+              </div>
+              <p class="text-xs font-bold text-slate-800 line-clamp-1">${task.title}</p>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  // 3. Fungsi menutup modal
+  function closeStatusDetailModal() {
+    const modal = document.getElementById('status-detail-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+// 1. Perbaikan pada openTransferModal (ganti allMembers jadi globalMembers)
+    function openTransferModal(taskId) {
+      document.getElementById('transfer-task-id').value = taskId;
+      document.getElementById('transfer-note-input').value = '';
+
+      const transferSelect = document.getElementById('transfer-member-select');
+      transferSelect.innerHTML = '<option value="">Pilih Anggota Penerima</option>';
+
+      // Gunakan globalMembers sesuai kode aplikasi Anda
+      if (Array.isArray(globalMembers)) {
+        globalMembers.forEach(member => {
+          // Opsional: jangan tampilkan diri sendiri sebagai penerima
+          if (currentUser && member.name === currentUser.name) return; 
+
+          const option = document.createElement('option');
+          option.value = member.id; 
+          option.textContent = member.name;
+          transferSelect.appendChild(option);
+        });
+      }
+
+      document.getElementById('transfer-modal').classList.remove('hidden');
+      document.getElementById('transfer-modal').classList.add('flex');
+    }
+
+    function closeTransferModal() {
+      document.getElementById('transfer-modal').classList.add('hidden');
+      document.getElementById('transfer-modal').classList.remove('flex');
+    }
+
+    async function handleTransferSubmit(event) {
+      event.preventDefault();
+      const taskId = document.getElementById('transfer-task-id').value;
+      const targetMember = document.getElementById('transfer-member-select').value;
+      const note = document.getElementById('transfer-note-input').value;
+
+      if (!targetMember) {
+        alert('Silakan pilih anggota penerima terlebih dahulu!');
+        return;
+      }
+
+      const { error } = await supabaseClient
+        .from('tasks')
+        .update({
+          transfer_status: 'pending_approval',
+          transferred_to: targetMember,
+          transfer_note: note
+        })
+        .eq('id', taskId);
+
+      if (error) {
+        alert('Gagal mengalihkan tugas: ' + error.message);
+      } else {
+        alert('Permintaan alih tugas berhasil dikirim ke ' + targetMember);
+        closeTransferModal();
+        fetchDashboardData();
+      }
+    }
+
+    // Aksi Approve oleh Penerima (Menggunakan window. agar pasti terbaca oleh HTML)
+window.approveTransfer = async function(taskId, targetMember) {
+  // Console log ini untuk memastikan tombol benar-benar bereaksi saat diklik
+  console.log("Tombol Terima diklik untuk Task ID:", taskId, "Target Member:", targetMember);
+  
+  if (confirm('Terima tugas ini dan masukkan ke daftar tugas Anda?')) {
+    const { error } = await supabaseClient
+      .from('tasks')
+      .update({
+        member_id: targetMember,        // Pindahkan pemilik tugas resmi ke penerima
+        transfer_status: null,          // Hapus status pending (kembalikan ke normal)
+        transferred_to: null,           // Kosongkan target
+        transfer_note: null             // Bersihkan catatan
+      })
+      .eq('id', taskId);
+
+    if (error) {
+      alert('Gagal menyetujui tugas: ' + error.message);
+    } else {
+      alert('Tugas berhasil diterima dan masuk ke daftar Anda!');
+      fetchDashboardData();
+    }
+  }
+};
+
+// Aksi Reject oleh Penerima (Menggunakan window.)
+window.rejectTransfer = async function(taskId) {
+  console.log("Tombol Tolak diklik untuk Task ID:", taskId);
+  
+  const reason = prompt('Masukkan alasan / catatan penolakan tugas:');
+  if (reason !== null) { // Jika user tidak klik Batal/Cancel
+    const { error } = await supabaseClient
+      .from('tasks')
+      .update({
+        transfer_status: 'rejected',
+        transfer_note: reason // Catatan penolakan dikembalikan ke pengirim
+      })
+      .eq('id', taskId);
+
+    if (error) {
+      alert('Gagal menolak tugas: ' + error.message);
+    } else {
+      alert('Tugas ditolak dan dikembalikan ke pengirim.');
+      fetchDashboardData();
+    }
+  }
+};
+
+
+  async function handleExcelImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        // Ambil lembar kerja (sheet) pertama
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // Ubah data Excel menjadi array objek JSON
+        const rows = XLSX.utils.sheet_to_json(worksheet);
+
+        if (rows.length === 0) {
+          alert("File Excel kosong atau format tidak sesuai!");
+          return;
+        }
+
+        let successCount = 0;
+        let failedCount = 0;
+        let errorDetails = []; // Array untuk menampung rincian alasan error
+
+        // Tampilkan indikator loading sederhana
+        alert(`Memproses ${rows.length} data tugas, mohon tunggu sebentar...`);
+
+        // Fungsi cerdas untuk menangani angka serial Excel maupun teks DD/MM/YYYY
+        const parseExcelDate = (val) => {
+          if (!val) return null;
+          
+          // Jika terbaca sebagai angka serial oleh Excel
+          if (typeof val === 'number') {
+            const excelEpoch = new Date(1899, 11, 30);
+            const convertedDate = new Date(excelEpoch.getTime() + val * 24 * 60 * 60 * 1000);
+            return convertedDate.toISOString().split('T')[0];
+          }
+          
+          let strVal = String(val).trim();
+          
+          // Jika terbaca sebagai teks berformat DD/MM/YYYY atau DD-MM-YYYY (seperti baris 66)
+          if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(strVal)) {
+            const parts = strVal.split(/[/-]/);
+            // Balik formatnya dari DD/MM/YYYY menjadi YYYY-MM-DD
+            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          }
+          
+          return strVal;
+        };
+
+        // Gunakan indeks baris Excel (dimulai dari baris ke-2 karena baris 1 biasanya header)
+        let rowIndex = 1;
+        for (let row of rows) {
+          rowIndex++;
+          
+          // Mengambil data dengan memeriksa berbagai variasi nama kolom (huruf besar/kecil)
+          const getVal = (keys) => {
+            for (let k of keys) {
+              if (row[k] !== undefined) return row[k];
+            }
+            return '';
+          };
+
+          // Ambil dan parsing tanggal pengajuan
+          let rawTglPengajuan = getVal(['tgl pengajuan', 'TGL PENGAJUAN', 'Tanggal Pengajuan', 'Tgl Pengajuan']);
+          let tglPengajuan = parseExcelDate(rawTglPengajuan);
+
+          const cabang = getVal(['cabang', 'CABANG', 'Cabang']) || '-';
+          const picName = String(getVal(['pic', 'PIC', 'PIC / Anggota'])).trim();
+          const title = getVal(['judul', 'JUDUL', 'Judul Tugas (Ket)', 'Ket']) || 'Tanpa Judul';
+          const priority = getVal(['prioritas', 'PRIORITAS', 'Prioritas']) || 'Low';
+          
+          // Ambil dan parsing deadline
+          let rawDeadline = getVal(['deadline', 'DEADLINE', 'Deadline']);
+          let deadline = parseExcelDate(rawDeadline);
+
+          const notes = getVal(['catatan', 'CATATAN', 'Catatan']) || '-';
+
+          // Pencarian PIC yang lebih aman
+          const matchedMember = globalMembers.find(m => 
+            m.name && m.name.trim().toLowerCase() === picName.toLowerCase()
+          );
+          
+          if (!matchedMember) {
+            failedCount++;
+            errorDetails.push(`• Baris ${rowIndex} ("${title}"): PIC "${picName}" tidak ditemukan di database tim!`);
+            continue; 
+          }
+
+          const newTaskPayload = {
+            title: title,
+            member_id: matchedMember.id,
+            tanggal_pengajuan: tglPengajuan || null,
+            cabang: String(cabang),
+            priority: String(priority),
+            due_date: deadline || null,
+            notes: String(notes),
+            status: 'In Progress'
+          };
+
+          const { error } = await supabaseClient.from('tasks').insert([newTaskPayload]);
+          
+          if (error) {
+            failedCount++;
+            errorDetails.push(`• Baris ${rowIndex} ("${title}"): ${error.message}`);
+          } else {
+            successCount++;
+          }
+        }
+
+        // Tampilkan hasil akhir beserta rincian errornya jika ada
+        let resultMessage = `Import Selesai!\n- Berhasil ditambahkan: ${successCount} tugas\n- Gagal/Error: ${failedCount} tugas`;
+        
+        if (errorDetails.length > 0) {
+          resultMessage += `\n\nDetail Alasan Error:\n` + errorDetails.join('\n');
+        }
+
+        alert(resultMessage);
+        
+        // Bersihkan input file agar bisa di-upload ulang jika perlu
+        event.target.value = '';
+
+        // Muat ulang data dashboard dan laporan
+        if (typeof fetchDashboardData === 'function') {
+          fetchDashboardData();
+        } else {
+          location.reload(); 
+        }
+
+      } catch (err) {
+        console.error("Gagal membaca file Excel:", err);
+        alert("Terjadi kesalahan saat membaca file Excel. Pastikan format filenya benar.");
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  }
+
+  </script>
+
+  <!-- Modal Detail Indikator Beban Kerja -->
+  <div id="status-detail-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden transform transition-all">
+      
+      <!-- Header Modal -->
+      <div id="status-modal-header" class="px-6 py-4 flex justify-between items-center border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span id="status-modal-badge" class="w-3 h-3 rounded-full"></span>
+          <h3 id="status-modal-title" class="text-base font-bold text-slate-800">Detail Anggota</h3>
+        </div>
+        <button onclick="closeStatusDetailModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">&times;</button>
+      </div>
+
+      <!-- Body / Daftar Nama -->
+      <div class="p-6 max-h-80 overflow-y-auto">
+        <div id="status-modal-list" class="space-y-2.5">
+          <!-- List nama/tugas di-render otomatis via JavaScript -->
+        </div>
+      </div>
+
+      <!-- Footer Modal -->
+      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <button onclick="closeStatusDetailModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition cursor-pointer">
+          Tutup
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+<!-- Modal Loading Real-time -->
+<div id="archive-loading-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+    <div class="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+    <div>
+      <h3 class="text-base font-bold text-slate-800">Sedang Mengarsipkan...</h3>
+      <p id="archive-loading-status" class="text-xs text-slate-500 mt-1">Menyiapkan data tugas...</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
